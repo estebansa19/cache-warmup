@@ -1,8 +1,7 @@
-import { lessonById } from "../content/lessons";
+import { cardByKey } from "../content/lessons";
 import { hrefFor, type Route } from "../router";
 import { useProgress } from "../state/ProgressContext";
 import { dueCardKeys } from "../state/srs";
-import { cardFor } from "../state/selectors";
 import { today } from "../utils/dates";
 import "./Nav.css";
 
@@ -16,7 +15,7 @@ const LINKS = [
 
 export function Nav({ route }: { route: Route }) {
   const { progress } = useProgress();
-  const due = dueCardKeys(progress.cards, today(), (key) => Boolean(cardFor(key, lessonById))).length;
+  const due = dueCardKeys(progress.cards, today(), (key) => cardByKey.has(key)).length;
   const current = route.view === "lesson" ? "home" : route.view;
 
   return (
@@ -40,9 +39,12 @@ export function Nav({ route }: { route: Route }) {
             >
               {link.label}
               {link.view === "review" && due > 0 && (
-                <span className="badge" aria-label={`${due} due`}>
-                  {due}
-                </span>
+                <>
+                  <span className="badge" aria-hidden="true">
+                    {due}
+                  </span>
+                  <span className="sr-only">, {due} due</span>
+                </>
               )}
             </a>
           ))}

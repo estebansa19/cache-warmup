@@ -1,5 +1,5 @@
 // Your AI preference, saved in cache-warmup.config.json at the project root.
-// The Settings page writes it; you can also edit it by hand:
+// The Settings page writes it; you can also edit it by hand (the server reads it on every request):
 //
 //   { "provider": "opencode", "model": "" }
 //
@@ -15,6 +15,7 @@ export const CONFIG_FILE =
 
 export const DEFAULT_PREFERENCE = { provider: "auto", model: "" };
 
+/** @returns {import("./options.mjs").Preference} */
 export function readPreference() {
   try {
     const data = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
@@ -27,6 +28,7 @@ export function readPreference() {
   }
 }
 
-export function writePreference(preference) {
+/** Throws if the file can't be written (read-only folder, disk full). */
+export function writePreference(/** @type {import("./options.mjs").Preference} */ preference) {
   writeFileSync(CONFIG_FILE, JSON.stringify(preference, null, 2) + "\n");
 }

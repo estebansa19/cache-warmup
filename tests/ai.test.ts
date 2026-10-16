@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { parseLooseJson } from "../src/ai/client";
-import { feedbackPrompt, toFeedback } from "../src/ai/prompt";
+import { toFeedback } from "../src/ai/feedback";
+import { feedbackPrompt, readFeedbackRequest } from "../server/prompt.mjs";
 
 describe("parseLooseJson", () => {
   test("plain JSON", () => expect(parseLooseJson('{"score": 3}')).toEqual({ score: 3 }));
@@ -32,21 +33,40 @@ describe("toFeedback", () => {
   });
 });
 
-describe("feedbackPrompt", () => {
+describe("feedbackPrompt (built on the server)", () => {
   test("includes the question, rubric, answer, and profile", () => {
-    const prompt = feedbackPrompt(
-      { question: "Design an LRU cache", rubric: ["hash map", "linked list"] },
-      "I'd use a map",
-      "Staff engineer",
-    );
+    const prompt = feedbackPrompt({
+      question: "Design an LRU cache",
+      rubric: ["hash map", "linked list"],
+      answer: "I'd use a map",
+      profile: "Staff engineer",
+    });
     expect(prompt).toContain("Design an LRU cache");
     expect(prompt).toContain("- hash map\n- linked list");
     expect(prompt).toContain("I'd use a map");
     expect(prompt).toContain("About the candidate: Staff engineer.");
   });
   test("falls back to a generic rubric and profile", () => {
-    const prompt = feedbackPrompt({ question: "Q", rubric: null }, "A", "  ");
+    const prompt = feedbackPrompt({ question: "Q", rubric: null, answer: "A", profile: "  " });
     expect(prompt).toContain("seniority unknown");
     expect(prompt).toContain("trade-offs");
+  });
+});
+
+describe("readFeedbackRequest", () => {
+  const ok = { question: "Q", rubric: ["r"], answer: "A", profile: "" };
+  test("accepts the four fields", () => expect(readFeedbackRequest(ok)).toEqual(ok));
+  test("a missing profile or rubric is fine", () =>
+    expect(readFeedbackRequest({ question: "Q", answer: "A" })).toEqual({
+      question: "Q",
+      rubric: null,
+      answer: "A",
+      profile: "",
+    }));
+  test("refuses anything else", () => {
+    expect(() => readFeedbackRequest({ prompt: "anything" })).toThrow(/question/);
+    expect(() => readFeedbackRequest({ ...ok, answer: " " })).toThrow(/answer/);
+    expect(() => readFeedbackRequest({ ...ok, rubric: [1] })).toThrow(/rubric/);
+    expect(() => readFeedbackRequest({ ...ok, question: "x".repeat(5000) })).toThrow(/too long/);
   });
 });

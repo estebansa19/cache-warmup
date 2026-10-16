@@ -1,9 +1,9 @@
-import { lessonById, lessons } from "../content/lessons";
+import { cardByKey, lessons } from "../content/lessons";
 import { TRACKS, playerSteps, type Lesson } from "../content/types";
 import { hrefFor } from "../router";
 import { levelInfo, streak } from "../state/levels";
 import { useProgress } from "../state/ProgressContext";
-import { cardFor, lessonScore, lessonStatus, nextLesson } from "../state/selectors";
+import { lessonScore, lessonStatus, nextLesson } from "../state/selectors";
 import { TIERS, dueCardKeys, tierCounts } from "../state/srs";
 import type { Progress } from "../state/progress";
 import { prettyDay, today } from "../utils/dates";
@@ -161,7 +161,7 @@ function ContinueCard({ progress }: { progress: Progress }) {
 
 function ReviewCard({ progress }: { progress: Progress }) {
   const now = today();
-  const due = dueCardKeys(progress.cards, now, (k) => Boolean(cardFor(k, lessonById))).length;
+  const due = dueCardKeys(progress.cards, now, (k) => cardByKey.has(k)).length;
   const total = Object.keys(progress.cards).length;
   const nextDue = Object.values(progress.cards)
     .map((c) => c.due)
@@ -197,10 +197,10 @@ function LessonRow({ lesson, progress }: { lesson: Lesson; progress: Progress })
   return (
     <a className="lesson-row" href={hrefFor({ view: "lesson", id: lesson.id })}>
       <span className="lesson-number">{pad(lesson.n)}</span>
-      <span>
+      <div>
         <h3>{lesson.title}</h3>
         <p>{lesson.tag}</p>
-      </span>
+      </div>
       {status === "done" ? (
         <span className="pill done">
           done · {score.correct}/{score.total}

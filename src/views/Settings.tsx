@@ -1,10 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { useAI } from "../ai/AIContext";
 import { AIError, type AIStatus } from "../ai/client";
+import { legacy } from "../content/lessons";
 import { useProgress } from "../state/ProgressContext";
 import { emptyProgress, normalize } from "../state/progress";
 import { today } from "../utils/dates";
+import { downloadFile } from "../utils/download";
+import { focusFirst } from "../utils/focus";
 import "./Settings.css";
+
+type Message = { text: string; error?: boolean } | null;
+
+/** Two live regions that are always on the page, so screen readers announce what changes in them. */
+function Notices({ message }: { message: Message }) {
+  return (
+    <>
+      <p role="status" className={message && !message.error ? "notice live" : "live"}>
+        {message && !message.error ? message.text : null}
+      </p>
+      <p role="alert" className={message?.error ? "notice error live" : "live"}>
+        {message?.error ? message.text : null}
+      </p>
+    </>
+  );
+}
 
 export function Settings() {
   return (
@@ -27,16 +46,38 @@ export function Settings() {
 
 function AISettings() {
   const ai = useAI();
+  // Kept here, not in ToolPicker, so "Saved" survives the picker starting over after a save.
+  const [message, setMessage] = useState<Message>(null);
+  const section = useRef<HTMLElement>(null);
+  // Saving rebuilds the picker (and its Save button), so put focus on the new state line.
+  useEffect(() => {
+    if (message && !message.error) focusFirst(section.current, ".ai-state");
+  }, [message]);
   return (
-    <section className="panel settings-card">
+    <section className="panel settings-card" ref={section}>
       <p className="eyebrow">AI feedback</p>
-      {ai.phase === "checking" && (
-        <div className="ai-state">
-          <span className="dot" /> Looking for the AI server…
-        </div>
-      )}
+      <div className="ai-state" role="status">
+        {ai.phase === "checking" ? (
+          <>
+            <span className="dot" /> Looking for the AI server…
+          </>
+        ) : ai.status?.active ? (
+          <>
+            <span className="dot on" /> On · {ai.status.active.label}
+            {ai.status.active.model && <span className="mono-note">({ai.status.active.model})</span>}
+          </>
+        ) : (
+          <>
+            <span className="dot warn" /> Off
+          </>
+        )}
+      </div>
       {ai.phase === "unreachable" && <ServerNotRunning />}
-      {ai.phase === "ready" && ai.status && <ToolPicker status={ai.status} />}
+      {/* key: start over from the server's choice whenever it changes (after saving, or "Check again") */}
+      {ai.phase === "ready" && ai.status && (
+        <ToolPicker key={JSON.stringify(ai.status.preference)} status={ai.status} onMessage={setMessage} />
+      )}
+      <Notices message={message} />
       <div className="row">
         <button className="btn ghost small" onClick={() => ai.refresh()}>
           Check again
@@ -50,9 +91,6 @@ function AISettings() {
 function ServerNotRunning() {
   return (
     <>
-      <div className="ai-state">
-        <span className="dot warn" /> Off
-      </div>
       <p>The lessons work fine without it. To get a mock interviewer that grades your answers:</p>
       <ol>
         <li>
@@ -71,18 +109,17 @@ function ServerNotRunning() {
   );
 }
 
-function ToolPicker({ status }: { status: AIStatus }) {
+function ToolPicker({ status, onMessage }: { status: AIStatus; onMessage: (message: Message) => void }) {
   const ai = useAI();
   const [provider, setProvider] = useState(status.preference.provider);
   const [model, setModel] = useState(status.preference.model);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
 
-  // Follow the server if it changes underneath us (e.g. "Check again").
-  useEffect(() => {
-    setProvider(status.preference.provider);
-    setModel(status.preference.model);
-  }, [status.preference.provider, status.preference.model]);
+  // Model names belong to one tool: switching tools clears it (or brings back the saved one).
+  const pick = (id: string) => {
+    setProvider(id);
+    setModel(id === status.preference.provider ? status.preference.model : "");
+  };
 
   const firstAvailable = status.providers.find((p) => p.available);
   const chosen = status.providers.find((p) => p.id === provider);
@@ -91,12 +128,12 @@ function ToolPicker({ status }: { status: AIStatus }) {
 
   async function save() {
     setSaving(true);
-    setMessage(null);
+    onMessage(null);
     try {
       await ai.choose({ provider, model: model.trim() });
-      setMessage({ text: "Saved. New feedback requests use this choice." });
+      onMessage({ text: "Saved. New feedback requests use this choice." });
     } catch (e) {
-      setMessage({
+      onMessage({
         error: true,
         text:
           e instanceof AIError && e.message !== e.code
@@ -110,18 +147,6 @@ function ToolPicker({ status }: { status: AIStatus }) {
 
   return (
     <>
-      <div className="ai-state">
-        {status.active ? (
-          <>
-            <span className="dot on" /> On · {status.active.label}
-            {status.active.model && <span className="mono-note">({status.active.model})</span>}
-          </>
-        ) : (
-          <>
-            <span className="dot warn" /> Off
-          </>
-        )}
-      </div>
       <p>
         {status.active
           ? `Feedback uses ${status.active.usage}. Only the question, its rubric, your answer, and the "About you" note are sent, and only when you ask for feedback.`
@@ -132,8 +157,8 @@ function ToolPicker({ status }: { status: AIStatus }) {
 
       {status.locked ? (
         <p className="notice">
-          The server was started with <code>--provider</code>, so the choice is fixed until you restart it
-          without that flag.
+          The server was started with <code>--provider</code> (or <code>CW_PROVIDER</code>), so the choice is
+          fixed until you restart it without that flag.
         </p>
       ) : (
         <fieldset className="tool-picker">
@@ -141,7 +166,7 @@ function ToolPicker({ status }: { status: AIStatus }) {
           <ToolOption
             id="auto"
             checked={provider === "auto"}
-            onPick={setProvider}
+            onPick={pick}
             title="Automatic"
             detail={
               firstAvailable
@@ -154,7 +179,7 @@ function ToolPicker({ status }: { status: AIStatus }) {
               key={p.id}
               id={p.id}
               checked={provider === p.id}
-              onPick={setProvider}
+              onPick={pick}
               title={p.label}
               detail={p.available ? `Uses ${p.usage}.` : p.hint}
               disabled={!p.available}
@@ -163,7 +188,7 @@ function ToolPicker({ status }: { status: AIStatus }) {
           <ToolOption
             id="off"
             checked={provider === "off"}
-            onPick={setProvider}
+            onPick={pick}
             title="Off"
             detail="No AI feedback. Compare with the strong answers instead."
           />
@@ -197,7 +222,6 @@ function ToolPicker({ status }: { status: AIStatus }) {
           <span className="muted">Saved on the server in cache-warmup.config.json.</span>
         </div>
       )}
-      {message && <p className={message.error ? "notice error" : "notice"}>{message.text}</p>}
     </>
   );
 }
@@ -298,27 +322,36 @@ function AboutYou() {
 function ProgressSettings() {
   const { progress, dispatch } = useProgress();
   const [confirmReset, setConfirmReset] = useState(false);
-  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+  const [message, setMessage] = useState<Message>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const resetButtons = useRef<HTMLDivElement>(null);
+  const resetToggled = useRef(false);
+
+  // The reset buttons swap places: keep focus on the safe choice ("Keep it", or "Reset…" again).
+  useEffect(() => {
+    if (!resetToggled.current) return;
+    focusFirst(resetButtons.current, confirmReset ? ".keep-progress" : ".reset-progress");
+  }, [confirmReset]);
+  const toggleReset = (open: boolean) => {
+    resetToggled.current = true;
+    setConfirmReset(open);
+  };
 
   function exportProgress() {
     const name = `cache-warmup-progress-${today()}.json`;
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(progress, null, 2)], { type: "application/json" }),
-    );
-    const link = Object.assign(document.createElement("a"), { href: url, download: name });
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    downloadFile(name, JSON.stringify(progress, null, 2));
     setMessage({ text: `Exported. Look for ${name} in your downloads.` });
   }
 
   async function importProgress(file: File) {
     try {
-      const imported = normalize(JSON.parse(await file.text()));
+      // Anything broken inside the file is dropped; only a file that isn't progress at all is refused.
+      const imported = normalize(JSON.parse(await file.text()), legacy);
       if (!imported) throw new Error("not progress");
       dispatch({ type: "replace", progress: imported });
+      const done = Object.keys(imported.done).length;
       setMessage({
-        text: `Imported. Welcome back: ${imported.xp} XP and ${Object.keys(imported.done).length} lessons done.`,
+        text: `Imported. Welcome back: ${imported.xp} XP and ${done} lesson${done === 1 ? "" : "s"} done.`,
       });
     } catch {
       setMessage({ error: true, text: "That file doesn't look like a Cache Warmup progress export." });
@@ -329,8 +362,8 @@ function ProgressSettings() {
     <section className="panel settings-card">
       <p className="eyebrow">Your progress</p>
       <p>Move your progress to another browser or computer, or keep a backup.</p>
-      {message && <p className={message.error ? "notice error" : "notice"}>{message.text}</p>}
-      <div className="row">
+      <Notices message={message} />
+      <div className="row" ref={resetButtons}>
         <button className="btn ghost small" onClick={exportProgress}>
           Export progress
         </button>
@@ -355,18 +388,18 @@ function ProgressSettings() {
               className="btn small danger"
               onClick={() => {
                 dispatch({ type: "replace", progress: emptyProgress() });
-                setConfirmReset(false);
+                toggleReset(false);
                 setMessage({ text: "Progress reset. Fresh start." });
               }}
             >
               Yes, reset everything
             </button>
-            <button className="btn ghost small" onClick={() => setConfirmReset(false)}>
+            <button className="btn ghost small keep-progress" onClick={() => toggleReset(false)}>
               Keep it
             </button>
           </>
         ) : (
-          <button className="btn ghost small" onClick={() => setConfirmReset(true)}>
+          <button className="btn ghost small reset-progress" onClick={() => toggleReset(true)}>
             Reset…
           </button>
         )}

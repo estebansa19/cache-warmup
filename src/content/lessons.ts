@@ -1,3 +1,4 @@
+import { cardsByKey, legacyKeys } from "../state/selectors";
 import { parseLesson, type LessonModule } from "./parse-lesson";
 import type { Lesson } from "./types";
 
@@ -15,5 +16,11 @@ for (const lesson of lessons) {
 }
 
 export const lessonById = new Map(lessons.map((l) => [l.id, l]));
+
+/** Every flashcard, by the key its schedule is saved under. */
+export const cardByKey = cardsByKey(lessons);
+
+/** For upgrading progress saved by version 1 of the app. */
+export const legacy = legacyKeys(lessons);
 
 export { extraQuestions } from "./extra-questions";

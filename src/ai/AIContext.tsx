@@ -1,5 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { getStatus, requestJson, savePreference, type AIStatus, type Preference } from "./client";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import type { Feedback } from "../state/progress";
+import {
+  getStatus,
+  requestFeedback,
+  savePreference,
+  type AIStatus,
+  type FeedbackRequest,
+  type Preference,
+} from "./client";
 
 type Phase = "checking" | "ready" | "unreachable";
 
@@ -8,10 +16,11 @@ type Value = {
   status: AIStatus | null;
   /** Where the AI server lives. Empty means "same address as the app". */
   serverUrl: string;
+  /** Saves the address and checks it, even if it didn't change. */
   setServerUrl(url: string): void;
   refresh(): Promise<void>;
   choose(preference: Preference): Promise<void>;
-  ask(prompt: string, signal: AbortSignal): Promise<unknown>;
+  ask(request: FeedbackRequest, signal: AbortSignal): Promise<Feedback>;
 };
 
 const AIContext = createContext<Value | null>(null);
@@ -25,18 +34,26 @@ function readServerUrl(): string {
   }
 }
 
+const toBase = (url: string) => url.trim().replace(/\/+$/, "");
+
 export function AIProvider({ children }: { children: ReactNode }) {
   const [serverUrl, setUrl] = useState(readServerUrl);
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [phase, setPhase] = useState<Phase>("checking");
-  const base = serverUrl.trim().replace(/\/+$/, "");
+  const base = toBase(serverUrl);
+  // Only the newest status request may update the screen; slower, older replies are dropped.
+  const latest = useRef(0);
 
   const refresh = useCallback(async () => {
+    const request = ++latest.current;
     setPhase("checking");
     try {
-      setStatus(await getStatus(base));
+      const next = await getStatus(base);
+      if (request !== latest.current) return;
+      setStatus(next);
       setPhase("ready");
     } catch {
+      if (request !== latest.current) return;
       setStatus(null);
       setPhase("unreachable");
     }
@@ -51,18 +68,23 @@ export function AIProvider({ children }: { children: ReactNode }) {
     status,
     serverUrl,
     setServerUrl(url) {
-      setUrl(url);
       try {
         localStorage.setItem(PREFS_KEY, JSON.stringify({ bridgeUrl: url }));
       } catch {
         /* ignore */
       }
+      // A new address refreshes through the effect above; the same one needs asking directly.
+      if (toBase(url) === base) refresh();
+      setUrl(url);
     },
     refresh,
     async choose(preference) {
-      setStatus(await savePreference(base, preference));
+      const next = await savePreference(base, preference);
+      latest.current++; // this is newer than any status request still in flight
+      setStatus(next);
+      setPhase("ready");
     },
-    ask: (prompt, signal) => requestJson(base, prompt, signal),
+    ask: (request, signal) => requestFeedback(base, request, signal),
   };
 
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>;

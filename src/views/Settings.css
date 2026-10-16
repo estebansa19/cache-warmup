@@ -102,7 +102,6 @@
   padding: 10px 14px;
 }
 .field input[type="text"]:focus {
-  outline: none;
   border-color: var(--ink);
 }
 textarea.ruled.short {

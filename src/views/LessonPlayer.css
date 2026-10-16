@@ -9,6 +9,10 @@
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
+.player-title {
+  font-size: var(--step-0);
+  font-weight: 700;
+}
 .segments {
   display: flex;
   gap: 3px;
@@ -44,7 +48,7 @@
   gap: 18px;
   min-height: 320px;
 }
-.sheet > h2 {
+.sheet > h2:not(.eyebrow) {
   font-size: var(--step-3);
   font-weight: 700;
 }
@@ -144,7 +148,7 @@
   font-weight: 700;
   font-size: var(--step-1);
 }
-.option:hover:not(:disabled) {
+.option:hover:not(:disabled, [aria-disabled="true"]) {
   border-color: var(--ink);
 }
 .option:disabled {
@@ -181,6 +185,19 @@
 }
 .option.dim {
   opacity: 0.55;
+}
+.option[aria-disabled="true"] {
+  cursor: default;
+}
+.option .mark.ok {
+  color: var(--good);
+}
+.option .mark.no {
+  color: var(--bad);
+}
+.verdict:focus {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
 }
 .myth-claim {
   font-family: var(--f-display);
@@ -311,8 +328,13 @@
   font-weight: 700;
 }
 
+/* On phones the hint gets its own line under the buttons. */
 @media (max-width: 520px) {
+  .player-nav {
+    flex-wrap: wrap;
+  }
   .player-hint {
-    display: none;
+    order: 3;
+    flex-basis: 100%;
   }
 }

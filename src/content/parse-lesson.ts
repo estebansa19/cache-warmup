@@ -1,6 +1,7 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import type { MDXContent } from "mdx/types";
-import { z } from "zod";
+import { hash } from "../utils/shuffle";
+import { describeIssues, frontmatterSchema } from "./frontmatter";
 import {
   Answer,
   CheatSheet,
@@ -12,7 +13,9 @@ import {
   Why,
   mdxComponents,
 } from "./mdx-components";
-import { TRACKS, type ContentStep, type Lesson, type MythStep, type OrderStep, type QuizStep } from "./types";
+import type { CheckKind, ContentStep, Lesson, MythStep, OrderStep, QuizStep, ReadStep } from "./types";
+
+export { TRACK_NAMES } from "./frontmatter";
 
 /*
  * Turns one lesson MDX file into a Lesson.
@@ -23,15 +26,6 @@ import { TRACKS, type ContentStep, type Lesson, type MythStep, type OrderStep, t
  *   - each <Quiz>, <Myth> or <Order> is a step of its own
  *   - <Interview> and <CheatSheet> close the lesson
  */
-
-const frontmatterSchema = z.object({
-  id: z.string().regex(/^[a-z0-9-]+$/, "use lowercase letters, digits and dashes"),
-  title: z.string().min(1),
-  track: z.enum(TRACKS.map((t) => t.name) as [string, ...string[]]),
-  mins: z.number().int().positive(),
-  tag: z.string().min(1),
-  cards: z.array(z.tuple([z.string().min(1), z.string().min(1)])).min(1),
-});
 
 export class LessonError extends Error {
   constructor(file: string, message: string) {
@@ -62,8 +56,20 @@ export const textOf = (node: ReactNode): string => {
 const why = (file: string, step: string, nodes: ReactNode[]) => {
   const el = nodes.find((n) => isElement(n, Why));
   if (!el) throw new LessonError(file, `every <${step}> needs a <Why> explaining the answer`);
-  return (el as Element).props.children;
+  return el.props.children;
 };
+
+const CHECK_ID = /^[a-z][a-z0-9-]*$/;
+
+/** The id a check's answer is saved under: its `id` prop, or a hash of its text. */
+function checkId(file: string, node: Element, kind: CheckKind, text: string): string {
+  const id = node.props.id;
+  if (id === undefined) return kind[0] + hash(`${kind}\n${text}`).toString(36);
+  if (typeof id !== "string" || !CHECK_ID.test(id)) {
+    throw new LessonError(file, `the id "${String(id)}" should start with a letter and use a-z, 0-9 and -`);
+  }
+  return id;
+}
 
 function parseQuiz(file: string, node: Element): QuizStep {
   const nodes = kids(node);
@@ -73,18 +79,21 @@ function parseQuiz(file: string, node: Element): QuizStep {
   const options: ReactNode[] = [];
   let answer = -1;
   kids(nodes[listAt]).forEach((li, i) => {
-    const parts = kids(li);
+    // With blank lines between options, MDX wraps each one in a <p>; look inside it.
+    const parts = kids(li).flatMap((part) => (isElement(part, "p") ? kids(part) : [part]));
     const box = parts.find((p) => isElement(p, "input"));
-    if (box && (box as Element).props.checked) {
+    if (box?.props.checked) {
       if (answer >= 0) throw new LessonError(file, "a <Quiz> can only have one `- [x]` option");
       answer = i;
     }
     options.push(parts.filter((p) => p !== box));
   });
   if (answer < 0) throw new LessonError(file, "mark the correct <Quiz> option with `- [x]`");
+  const question = nodes.slice(0, listAt).filter((n) => !isElement(n, Why));
   return {
     kind: "quiz",
-    question: nodes.slice(0, listAt).filter((n) => !isElement(n, Why)),
+    id: checkId(file, node, "quiz", [question, ...options].map(textOf).join("\n")),
+    question,
     options,
     answer,
     why: why(file, "Quiz", nodes),
@@ -93,12 +102,15 @@ function parseQuiz(file: string, node: Element): QuizStep {
 
 function parseMyth(file: string, node: Element): MythStep {
   const nodes = kids(node);
-  if (typeof node.props.fact !== "boolean")
+  const fact = node.props.fact;
+  if (typeof fact !== "boolean")
     throw new LessonError(file, "write <Myth fact={true}> or <Myth fact={false}>");
+  const claim = nodes.filter((n) => !isElement(n, Why));
   return {
     kind: "myth",
-    claim: nodes.filter((n) => !isElement(n, Why)),
-    fact: node.props.fact,
+    id: checkId(file, node, "myth", textOf(claim)),
+    claim,
+    fact,
     why: why(file, "Myth", nodes),
   };
 }
@@ -108,13 +120,16 @@ function parseOrder(file: string, node: Element): OrderStep {
   const listAt = nodes.findIndex((n) => isElement(n, "ol"));
   if (listAt < 0)
     throw new LessonError(file, "an <Order> needs a numbered list, written in the correct order");
-  const items = kids(nodes[listAt]).map((li) => (li as Element).props.children);
+  const items = kids(nodes[listAt]).map((li) => (isElement(li) ? li.props.children : li));
   if (items.length < 3) throw new LessonError(file, "an <Order> needs at least 3 items");
+  const question = nodes.slice(0, listAt);
+  const itemText = items.map(textOf);
   return {
     kind: "order",
-    question: nodes.slice(0, listAt),
+    id: checkId(file, node, "order", [textOf(question), ...itemText].join("\n")),
+    question,
     items,
-    itemText: items.map(textOf),
+    itemText,
     why: why(file, "Order", nodes),
   };
 }
@@ -136,7 +151,7 @@ function parseInterview(file: string, node: Element) {
       .map(textOf)
       .map((s) => s.trim())
       .filter(Boolean),
-    answer: (answer as Element).props.children,
+    answer: answer.props.children,
   };
 }
 
@@ -149,17 +164,17 @@ export function parseLesson(file: string, mod: LessonModule): Lesson {
 
   const meta = frontmatterSchema.safeParse(mod.frontmatter ?? {});
   if (!meta.success) {
-    const issues = meta.error.issues
-      .map((i) => `${i.path.join(".") || "frontmatter"} (${i.message})`)
-      .join(", ");
-    throw new LessonError(name, `check the frontmatter: ${issues}`);
+    throw new LessonError(name, `check the frontmatter: ${describeIssues(meta.error.issues)}`);
   }
 
   // Calling the compiled MDX function gives us its top-level blocks without rendering anything.
+  // This only works while MDXContent stays provider-free and wrapper-free: no
+  // providerImportSource and no layout in the MDX options, so the result is the lesson's
+  // own elements, with h2, p, ul, ol, li and input as plain tags.
   const root = mod.default({ components: mdxComponents }) as ReactNode;
   const hook: ReactNode[] = [];
   const steps: ContentStep[] = [];
-  let open: Extract<ContentStep, { kind: "read" }> | null = null;
+  let open: ReadStep | null = null;
   let interview: Lesson["interview"] | null = null;
   let cheatSheet: ReactNode = null;
 
@@ -171,7 +186,8 @@ export function parseLesson(file: string, mod: LessonModule): Lesson {
   for (const node of kids(root)) {
     if (isElement(node, "h2")) {
       close();
-      open = { kind: "read", title: textOf(node), body: [] };
+      const step: ReadStep = { kind: "read", title: textOf(node), body: [] };
+      open = step;
     } else if (isElement(node, Quiz)) {
       close();
       steps.push(parseQuiz(name, node));
@@ -188,7 +204,7 @@ export function parseLesson(file: string, mod: LessonModule): Lesson {
       close();
       cheatSheet = node.props.children;
     } else if (open) {
-      (open as { body: ReactNode[] }).body.push(node);
+      open.body.push(node);
     } else if (steps.length === 0) {
       hook.push(node);
     } else {
@@ -201,15 +217,28 @@ export function parseLesson(file: string, mod: LessonModule): Lesson {
   if (!cheatSheet) throw new LessonError(name, "add a <CheatSheet> block at the end");
   if (!steps.length) throw new LessonError(name, "a lesson needs at least one `## heading` step");
 
+  const checkIds = steps.flatMap((s) => (s.kind === "read" ? [] : [s.id]));
+  if (new Set(checkIds).size < checkIds.length) {
+    throw new LessonError(
+      name,
+      'two quick checks have the same text or id; give one an id, like <Quiz id="...">',
+    );
+  }
+
   const fm = meta.data;
+  const cards = fm.cards.map(([front, back]) => ({ id: "c" + hash(front).toString(36), front, back }));
+  if (new Set(cards.map((c) => c.id)).size < cards.length) {
+    throw new LessonError(name, "two flashcards have the same front");
+  }
+
   return {
     id: fm.id,
     n,
     title: fm.title,
-    track: fm.track as Lesson["track"],
+    track: fm.track,
     mins: fm.mins,
     tag: fm.tag,
-    cards: fm.cards,
+    cards,
     hook,
     steps,
     interview,

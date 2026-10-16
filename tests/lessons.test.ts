@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { extraQuestions, lessons } from "../src/content/lessons";
-import { LessonError, parseLesson } from "../src/content/parse-lesson";
+import { cardByKey, extraQuestions, legacy, lessons } from "../src/content/lessons";
+import { LessonError, parseLesson, textOf } from "../src/content/parse-lesson";
+import { isCheck } from "../src/content/types";
 
 // Every lesson file is loaded and validated here, so a broken lesson fails CI with a readable message.
 
@@ -20,14 +21,26 @@ describe("lessons", () => {
       expect(lesson.cards.length).toBeGreaterThanOrEqual(4);
       for (const step of lesson.steps) {
         if (step.kind === "quiz") {
-          expect(step.options.length).toBeGreaterThanOrEqual(2);
-          expect(step.answer).toBeLessThan(step.options.length);
+          // Every option has text, no two read the same, so the marked answer is a real choice.
+          const options = step.options.map((o) => textOf(o).trim());
+          expect(options.length).toBeGreaterThanOrEqual(2);
+          expect(options.every(Boolean)).toBe(true);
+          expect(new Set(options).size).toBe(options.length);
         }
         if (step.kind === "order") expect(step.itemText.every(Boolean)).toBe(true);
         if (step.kind === "read") expect(step.title).not.toBe("");
       }
     },
   );
+
+  test("every check and card has a saved-progress key, and version 1 keys map onto them", () => {
+    for (const lesson of lessons) {
+      const checks = lesson.steps.filter(isCheck).length;
+      expect(legacy.get(lesson.id)?.steps.filter(Boolean).length).toBe(checks);
+      expect(legacy.get(lesson.id)?.cards.length).toBe(lesson.cards.length);
+    }
+    expect(cardByKey.size).toBe(lessons.reduce((n, l) => n + l.cards.length, 0));
+  });
 
   test("extra questions have unique ids", () => {
     const ids = extraQuestions.map((q) => q.id);

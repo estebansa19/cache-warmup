@@ -83,6 +83,21 @@
   padding: 0 7px;
   line-height: 1.6;
 }
+/* Phones: every link stays visible, wrapping to a second row instead of scrolling out of view. */
+@media (max-width: 720px) {
+  .topbar-inner {
+    gap: 10px;
+  }
+  .nav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    overflow-x: visible;
+    gap: 2px;
+  }
+  .nav a {
+    padding: 5px 9px;
+  }
+}
 @media (max-width: 520px) {
   .brand-name {
     display: none;

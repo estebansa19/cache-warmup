@@ -1,15 +1,27 @@
-import { isCheck, playerSteps, type Lesson } from "../content/types";
-import type { Progress } from "./progress";
+import { isCheck, playerSteps, type CheckStep, type Lesson } from "../content/types";
+import type { CheckResult, LegacyKeys, Progress } from "./progress";
+
+/** Where a check's answer is saved. */
+export const checkKey = (lesson: Lesson, step: CheckStep) => `${lesson.id}:${step.id}`;
+
+/** Where a flashcard's schedule is saved. */
+export const cardKey = (lesson: Lesson, card: Lesson["cards"][number]) => `${lesson.id}:${card.id}`;
+
+/** Your answer to a check, if you gave one. An answer saved for a different kind of check doesn't count. */
+export function resultFor(lesson: Lesson, step: CheckStep, progress: Progress): CheckResult | undefined {
+  const result = progress.checks[checkKey(lesson, step)];
+  return result?.kind === step.kind ? result : undefined;
+}
 
 /** Quick-check score for one lesson. */
 export function lessonScore(lesson: Lesson, progress: Progress) {
   let total = 0;
   let correct = 0;
-  playerSteps(lesson).forEach((step, i) => {
-    if (!isCheck(step)) return;
+  for (const step of lesson.steps) {
+    if (!isCheck(step)) continue;
     total++;
-    if (progress.checks[`${lesson.id}:${i}`]?.ok) correct++;
-  });
+    if (resultFor(lesson, step, progress)?.ok) correct++;
+  }
   return { total, correct };
 }
 
@@ -27,10 +39,28 @@ export function nextLesson(lessons: Lesson[], progress: Progress): Lesson | null
   return lessons.find((l) => !progress.done[l.id]) ?? null;
 }
 
-/** The flashcard behind a "lessonId:index" key. */
-export function cardFor(key: string, lessons: Map<string, Lesson>) {
-  const [id, index] = key.split(":");
-  const lesson = lessons.get(id);
-  const card = lesson?.cards[Number(index)];
-  return lesson && card ? { lesson, front: card[0], back: card[1] } : null;
-}
+export type CardInfo = { lesson: Lesson; front: string; back: string };
+
+/** Every flashcard by its saved key. */
+export const cardsByKey = (lessons: Lesson[]) =>
+  new Map<string, CardInfo>(
+    lessons.flatMap((lesson) =>
+      lesson.cards.map(
+        (card) => [cardKey(lesson, card), { lesson, front: card.front, back: card.back }] as const,
+      ),
+    ),
+  );
+
+/** How version 1 progress keys ("lessonId:position") map to today's keys. */
+export const legacyKeys = (lessons: Lesson[]): LegacyKeys =>
+  new Map(
+    lessons.map((lesson) => [
+      lesson.id,
+      {
+        steps: playerSteps(lesson).map((step) =>
+          isCheck(step) ? { key: checkKey(lesson, step), kind: step.kind } : null,
+        ),
+        cards: lesson.cards.map((card) => cardKey(lesson, card)),
+      },
+    ]),
+  );

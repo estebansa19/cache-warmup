@@ -1,4 +1,5 @@
-function hash(text: string): number {
+/** FNV-1a: a small, stable hash of a string. */
+export function hash(text: string): number {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);

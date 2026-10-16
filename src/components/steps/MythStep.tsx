@@ -1,18 +1,27 @@
+import { useState } from "react";
 import type { MythStep as Step } from "../../content/types";
 import type { CheckResult } from "../../state/progress";
-import { Verdict } from "./Verdict";
+import { Mark, Verdict } from "./Verdict";
 
 type Props = { step: Step; result?: CheckResult; onAnswer: (r: CheckResult) => void };
 
 export function MythStep({ step, result, onAnswer }: Props) {
+  const [answeredNow, setAnsweredNow] = useState(false);
   const choice = (value: boolean, label: string) => {
-    const state = !result ? "" : value === step.fact ? "right" : value === result.pick ? "wrong" : "dim";
+    const correct = value === step.fact;
+    const chosen = value === result?.pick;
+    const state = !result ? "" : correct ? "right" : chosen ? "wrong" : "dim";
     return (
       <button
         className={`option centered ${state}`}
-        disabled={Boolean(result)}
-        onClick={() => onAnswer({ ok: value === step.fact, pick: value })}
+        aria-disabled={Boolean(result)}
+        onClick={() => {
+          if (result) return;
+          setAnsweredNow(true);
+          onAnswer({ kind: "myth", ok: correct, pick: value });
+        }}
       >
+        {result && <Mark correct={correct} chosen={chosen} />}
         {label}
       </button>
     );
@@ -20,16 +29,23 @@ export function MythStep({ step, result, onAnswer }: Props) {
 
   return (
     <>
-      <span className="eyebrow step-kind check">
+      <h2 className="eyebrow step-kind check">
         <i />
         Myth or fact?
-      </span>
+      </h2>
       <div className="myth-claim prose">{step.claim}</div>
       <div className="myth-choices">
         {choice(true, "Fact")}
         {choice(false, "Myth")}
       </div>
-      {result && <Verdict ok={result.ok} why={step.why} lead={<b>{step.fact ? "Fact." : "Myth."}</b>} />}
+      {result && (
+        <Verdict
+          ok={result.ok}
+          why={step.why}
+          lead={<b>{step.fact ? "Fact." : "Myth."}</b>}
+          focus={answeredNow}
+        />
+      )}
     </>
   );
 }

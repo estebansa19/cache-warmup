@@ -1,20 +1,30 @@
 import type { ReactNode } from "react";
+import { TRACK_NAMES } from "./frontmatter";
 
-export const TRACKS = [
-  { name: "Foundations", blurb: "How code grows and how it's shaped." },
-  { name: "Data", blurb: "Where most production surprises come from." },
-  { name: "Systems", blurb: "Jobs, networks, caches, and the space between services." },
-  { name: "Craft", blurb: "Tests, security, and the story you tell about your work." },
-] as const;
+export type Track = (typeof TRACK_NAMES)[number];
 
-export type Track = (typeof TRACKS)[number]["name"];
+const BLURBS: Record<Track, string> = {
+  Foundations: "How code grows and how it's shaped.",
+  Data: "Where most production surprises come from.",
+  Systems: "Jobs, networks, caches, and the space between services.",
+  Craft: "Tests, security, and the story you tell about your work.",
+};
+
+export const TRACKS = TRACK_NAMES.map((name) => ({ name, blurb: BLURBS[name] }));
 
 /** A step that teaches: a `## heading` and everything under it. */
 export type ReadStep = { kind: "read"; title: string; body: ReactNode[] };
 
+/*
+ * Quick checks have an `id` that progress is saved under: the `id` prop when the lesson sets
+ * one (<Quiz id="...">), otherwise a hash of the check's text. Editing other steps, or moving
+ * this one, keeps your answer.
+ */
+
 /** Multiple choice. `answer` is the index of the option marked `- [x]`. */
 export type QuizStep = {
   kind: "quiz";
+  id: string;
   question: ReactNode[];
   options: ReactNode[];
   answer: number;
@@ -22,11 +32,12 @@ export type QuizStep = {
 };
 
 /** A statement to judge. `fact` is true when the statement is correct. */
-export type MythStep = { kind: "myth"; claim: ReactNode[]; fact: boolean; why: ReactNode };
+export type MythStep = { kind: "myth"; id: string; claim: ReactNode[]; fact: boolean; why: ReactNode };
 
 /** Items written in the correct order; the player shuffles them. */
 export type OrderStep = {
   kind: "order";
+  id: string;
   question: ReactNode[];
   items: ReactNode[];
   itemText: string[];
@@ -35,6 +46,7 @@ export type OrderStep = {
 
 export type ContentStep = ReadStep | QuizStep | MythStep | OrderStep;
 export type CheckStep = QuizStep | MythStep | OrderStep;
+export type CheckKind = CheckStep["kind"];
 
 /** What the lesson player walks through: an intro, the lesson's steps, then the interview rep and the recap. */
 export type PlayerStep = { kind: "hook" } | ContentStep | { kind: "interview" } | { kind: "recap" };
@@ -58,7 +70,8 @@ export type Lesson = {
   steps: ContentStep[];
   interview: Interview;
   cheatSheet: ReactNode;
-  cards: [front: string, back: string][];
+  /** Flashcards. `id` is a hash of the front, so reordering cards keeps their schedule. */
+  cards: { id: string; front: string; back: string }[];
 };
 
 export type ExtraQuestion = { id: string; topic: string; q: string };

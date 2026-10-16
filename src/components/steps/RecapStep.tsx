@@ -2,7 +2,7 @@ import type { Lesson } from "../../content/types";
 import { hrefFor } from "../../router";
 import { XP } from "../../state/levels";
 import { useProgress } from "../../state/ProgressContext";
-import { lessonScore } from "../../state/selectors";
+import { cardKey, lessonScore } from "../../state/selectors";
 import { prettyDay, today } from "../../utils/dates";
 
 export function RecapStep({ lesson }: { lesson: Lesson }) {
@@ -17,7 +17,7 @@ export function RecapStep({ lesson }: { lesson: Lesson }) {
       lessonId: lesson.id,
       correct: score.correct,
       total: score.total,
-      cardCount: lesson.cards.length,
+      cardKeys: lesson.cards.map((card) => cardKey(lesson, card)),
       today: today(),
     });
 

@@ -1,27 +1,43 @@
+import { z } from "zod/mini";
+import type { Feedback } from "../state/progress";
+import { toFeedback } from "./feedback";
+
 /*
  * Talks to the local AI bridge (server/bridge.mjs). With `npm start` or `npm run dev`
  * it's on the same address as the app; for a hosted copy, Settings can point it elsewhere.
+ * Every reply is checked before the app uses it.
  */
 
-export type ProviderInfo = {
-  id: string;
-  label: string;
-  usage: string;
-  hint: string;
-  needsModel: boolean;
-  available: boolean;
-  models: string[];
-};
+const providerSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  usage: z.string(),
+  hint: z.string(),
+  needsModel: z.boolean(),
+  available: z.boolean(),
+  models: z.array(z.string()),
+});
 
-export type Preference = { provider: string; model: string };
+const preferenceSchema = z.object({ provider: z.string(), model: z.string() });
 
-export type AIStatus = {
-  enabled: boolean;
-  active: { id: string; label: string; usage: string; model: string } | null;
-  preference: Preference;
-  locked: boolean;
-  providers: ProviderInfo[];
-};
+const statusSchema = z.object({
+  enabled: z.boolean(),
+  active: z.nullable(z.object({ id: z.string(), label: z.string(), usage: z.string(), model: z.string() })),
+  preference: preferenceSchema,
+  locked: z.boolean(),
+  providers: z.array(providerSchema),
+});
+
+const feedbackReplySchema = z.object({ text: z.string(), provider: z.string() });
+
+const errorSchema = z.object({ error: z.object({ code: z.string(), message: z.optional(z.string()) }) });
+
+export type ProviderInfo = z.infer<typeof providerSchema>;
+export type Preference = z.infer<typeof preferenceSchema>;
+export type AIStatus = z.infer<typeof statusSchema>;
+
+/** What the interviewer grades. The server turns it into the prompt. */
+export type FeedbackRequest = { question: string; rubric: string[] | null; answer: string; profile: string };
 
 export class AIError extends Error {
   constructor(
@@ -32,23 +48,32 @@ export class AIError extends Error {
   }
 }
 
-async function call<T>(base: string, path: string, init: RequestInit = {}, timeoutMs?: number): Promise<T> {
-  const ctl = new AbortController();
-  const outer = init.signal;
-  outer?.addEventListener("abort", () => ctl.abort());
-  const timer = timeoutMs ? setTimeout(() => ctl.abort(), timeoutMs) : undefined;
+async function call<T>(
+  base: string,
+  path: string,
+  schema: z.ZodMiniType<T>,
+  init: RequestInit = {},
+  timeoutMs?: number,
+): Promise<T> {
+  const signals = [init.signal, timeoutMs ? AbortSignal.timeout(timeoutMs) : null].filter((s) => s != null);
   let res: Response;
   try {
-    res = await fetch(base + path, { ...init, signal: ctl.signal, cache: "no-store" });
+    res = await fetch(base + path, { ...init, signal: AbortSignal.any(signals), cache: "no-store" });
   } catch {
-    if (outer?.aborted) throw new AIError("cancelled");
+    if (init.signal?.aborted) throw new AIError("cancelled");
     throw new AIError("unreachable");
-  } finally {
-    clearTimeout(timer);
   }
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data) throw new AIError(data?.error?.code ?? "unreachable", data?.error?.message);
-  return data as T;
+  const data: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const error = z.safeParse(errorSchema, data);
+    throw error.success
+      ? new AIError(error.data.error.code, error.data.error.message)
+      : new AIError("unreachable");
+  }
+  const parsed = z.safeParse(schema, data);
+  if (!parsed.success)
+    throw new AIError("bad_response", "The AI server sent a reply this app doesn't understand.");
+  return parsed.data;
 }
 
 const json = (method: string, body: unknown): RequestInit => ({
@@ -57,19 +82,24 @@ const json = (method: string, body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-export const getStatus = (base: string) => call<AIStatus>(base, "/api/ai/status", {}, 4000);
+export const getStatus = (base: string, signal?: AbortSignal) =>
+  call(base, "/api/ai/status", statusSchema, { signal }, 4000);
 
 export const savePreference = (base: string, preference: Preference) =>
-  call<AIStatus>(base, "/api/ai/config", json("PUT", preference));
+  call(base, "/api/ai/config", statusSchema, json("PUT", preference));
 
-export async function requestJson(base: string, prompt: string, signal: AbortSignal): Promise<unknown> {
-  const { text } = await call<{ text: string }>(base, "/api/ai/feedback", {
-    ...json("POST", { prompt }),
+export async function requestFeedback(
+  base: string,
+  request: FeedbackRequest,
+  signal: AbortSignal,
+): Promise<Feedback> {
+  const { text } = await call(base, "/api/ai/feedback", feedbackReplySchema, {
+    ...json("POST", request),
     signal,
   });
-  const parsed = parseLooseJson(text);
-  if (parsed === null) throw new AIError("invalid_json");
-  return parsed;
+  const feedback = toFeedback(parseLooseJson(text));
+  if (!feedback) throw new AIError("invalid_json");
+  return feedback;
 }
 
 /** Models often wrap JSON in a code fence or add a sentence around it. Find the JSON anyway. */

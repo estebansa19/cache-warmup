@@ -6,13 +6,18 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
  * Quiz, Myth, Order, Why, Interview, Rubric, Answer and CheatSheet are markers:
  * they never render by themselves. parse-lesson.ts finds them and turns them into
  * lesson steps. Note and table render as written.
+ *
+ * Don't map plain Markdown tags (h2, p, ul, ol, li, input) to components here:
+ * parse-lesson.ts looks for them by tag name. tests/parse-lesson.test.ts checks this.
  */
 
 type Children = { children?: ReactNode };
+/** `id` keeps saved answers attached when you reword a check. Optional. */
+type Check = Children & { id?: string };
 
-export const Quiz = (_: Children) => null;
-export const Myth = (_: Children & { fact: boolean }) => null;
-export const Order = (_: Children) => null;
+export const Quiz = (_: Check) => null;
+export const Myth = (_: Check & { fact: boolean }) => null;
+export const Order = (_: Check) => null;
 export const Why = (_: Children) => null;
 export const Interview = (_: Children) => null;
 export const Rubric = (_: Children) => null;
@@ -29,10 +34,10 @@ export function Note({ children }: Children) {
   );
 }
 
-/** Wide tables scroll inside their own box instead of stretching the page. */
+/** Wide tables scroll inside their own box instead of stretching the page. Focusable, so keyboards can scroll it. */
 function Table(props: ComponentPropsWithoutRef<"table">) {
   return (
-    <div className="table-wrap">
+    <div className="table-wrap" tabIndex={0} role="region" aria-label="Table, scrolls sideways">
       <table {...props} />
     </div>
   );

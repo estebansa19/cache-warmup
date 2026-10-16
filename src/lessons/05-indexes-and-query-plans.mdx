@@ -106,7 +106,7 @@ An index matches the expression it was built on. `add_index :users, "lower(email
 On a big production table, build indexes <mark>concurrently</mark> so writes aren't blocked:
 
 ```ruby
-class AddIndexToInvoices < ActiveRecord::Migration[7.1]
+class AddIndexToInvoices < ActiveRecord::Migration[8.1]
   disable_ddl_transaction!
   def change
     add_index :invoices, [:account_id, :due_on],

@@ -32,7 +32,7 @@ Code examples lean toward Ruby on Rails and PostgreSQL, but the ideas apply to a
 
 ## Run it locally
 
-You need [Node.js](https://nodejs.org) 22 or newer.
+You need [Node.js](https://nodejs.org) 22.12 or newer (22, 24, or 26+).
 
 ```bash
 git clone https://github.com/estebansa19/cache-warmup.git
@@ -59,11 +59,13 @@ After you answer an interview question, an AI can play the interviewer. You get 
 | 6     | Anthropic API                                             | API credits                              | `export ANTHROPIC_API_KEY=...`                                                                 |
 | 7     | Any OpenAI-compatible API                                 | API credits                              | `export OPENAI_API_KEY=...` (plus `OPENAI_BASE_URL` for non-OpenAI servers), then pick a model |
 
-Subscription-based tools come first on purpose: if you already pay for Claude or ChatGPT, feedback comes out of that plan instead of costing you API credits. One caveat: a CLI uses whatever account it's logged into, so if your Claude Code is logged in with an API key, feedback uses API credits.
+Subscription-based tools come first on purpose: if you already pay for Claude or ChatGPT, feedback comes out of that plan instead of costing you API credits. "Auto" never picks the OpenAI-compatible API, because it can't run until you choose a model.
+
+One caveat about API keys: Claude Code switches to API credits when `ANTHROPIC_API_KEY` is set, and Codex CLI does the same with `CODEX_API_KEY`. Cache Warmup removes `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` before it runs Claude Code, and `CODEX_API_KEY` before it runs Codex, so they use your plan. A CLI still uses whatever account it's logged into, though: if you logged Claude Code itself in with an API key, feedback uses API credits.
 
 ### Choosing a tool yourself
 
-Open **Settings** in the app. It lists every tool, marks the ones that are ready on your machine, and lets you pick one (and a model, if you want a specific one). Your choice is saved in `cache-warmup.config.json` in the project folder, so it sticks between restarts. You can also edit that file by hand:
+Open **Settings** in the app. It lists every tool, marks the ones that are ready on your machine, and lets you pick one (and a model, if you want a specific one). Your choice is saved in `cache-warmup.config.json` in the project folder, so it sticks between restarts. You can also edit that file by hand. The server reads it on every request, so edits apply right away, without a restart, in both `npm start` and `npm run dev`:
 
 ```json
 { "provider": "opencode", "model": "" }
@@ -77,16 +79,27 @@ From the terminal:
 npm run providers                        # what's available on this machine
 npm start -- --provider opencode         # use this tool for this run (locks the Settings picker)
 npm start -- --provider claude --model sonnet
+CW_PROVIDER=claude npm run dev           # the same, as an environment variable (works for npm start too)
 ```
+
+Which tool is used, from strongest to weakest: `--provider`/`--model`, then `CW_PROVIDER`/`CW_MODEL`, then the choice saved in Settings, then the first tool found. A model needs a provider next to it, because model names belong to one tool: `--model sonnet` on its own stops with an error that says so. `node server/index.mjs --help` lists every option.
 
 ### What gets sent, and what doesn't
 
 - When you click **Get interviewer feedback**, the question, its rubric, your answer, and your optional "About you" note go to the tool you chose. Nothing is sent anywhere else, and nothing is sent until you click.
-- The CLIs run in plain question-and-answer mode. Claude Code runs with every tool disabled (`--tools ""`). Each run happens in an empty temporary folder, so the AI never sees your files.
+- The server builds the interviewer prompt itself. The browser can only send a question, its rubric, your answer, and your note, so no website can make your AI tool run a prompt of its own.
+- Each CLI gets the prompt on stdin and runs in an empty temporary folder, with tools turned off as far as each one allows:
+  - **Claude Code:** every built-in tool off (`--tools ""`), no MCP servers, no skills. Your own Claude Code settings, such as hooks, still load.
+  - **OpenCode:** every permission denied (no tools at all), and plugins skipped (`--pure`).
+  - **Gemini CLI:** a policy file that denies every tool. A policy your organization sets as admin can still override it.
+  - **Codex CLI:** Codex has no switch that turns every tool off. Cache Warmup turns off its shell, image viewer, and web search, and keeps its sandbox read-only. Its other built-in tools may still be available to the model.
+  - **Ollama and the APIs:** a plain request and reply, with no tools.
+- Stopping a request (or closing the page) stops the AI tool too, and a request that runs over 3 minutes is stopped.
 - The server only listens on your own machine (`127.0.0.1`). It rejects requests from other websites, so a page you have open elsewhere can't use your AI tool or spend your usage.
-- There's no telemetry, no account, and no database. Your progress stays in your browser.
+- `npm start` serves the app with headers that stop other sites from framing it, and never serves hidden files.
+- There's no telemetry, no account, and no database. Your progress stays in your browser, and the fonts ship with the app, so studying makes no requests to other sites.
 
-Claude Code and OpenCode have been tested end to end. Codex CLI, Gemini CLI, Ollama, and the APIs follow their documented command-line options and APIs but have had less real-world testing. If one doesn't work for you, please [open an issue](https://github.com/estebansa19/cache-warmup/issues). The server runs on macOS and Linux; on Windows, use WSL.
+Claude Code has been tested end to end. OpenCode has been tested end to end before, and its no-tools settings were checked with `opencode debug agent`. Codex CLI, Gemini CLI, Ollama, and the APIs follow their documented command-line options, source code, and APIs, but have had less real-world testing. If one doesn't work for you, please [open an issue](https://github.com/estebansa19/cache-warmup/issues). The server runs on macOS and Linux; on Windows, use WSL.
 
 ## Your progress
 
@@ -98,7 +111,7 @@ Progress is saved in your browser's local storage: XP, answers, flashcard schedu
 
 ## Hosting it yourself
 
-`npm run build` produces plain static files in `dist/`, which work on any static host. The [GitHub Pages workflow](.github/workflows/pages.yml) does this on every push to `main`.
+`npm run build` produces plain static files in `dist/`, which work on any static host. The [GitHub Pages workflow](.github/workflows/pages.yml) does this on every push to `main`. In a fork, turn it on first: **Settings → Pages → Source → GitHub Actions**.
 
 AI feedback needs the local server, because that's what talks to your AI tool. To use a hosted copy _and_ AI feedback:
 
@@ -110,6 +123,8 @@ AI feedback needs the local server, because that's what talks to your AI tool. T
 2. In the hosted app, open Settings → **Advanced** and enter `http://localhost:4317`.
 
 Your browser may ask whether the site can reach devices on your local network. Allow it.
+
+An allowed address trusts every page served from it. `https://your-name.github.io` covers **all** of your GitHub Pages sites (`your-name.github.io/anything`), so only add it if you trust everything published there. `CW_ALLOWED_ORIGINS` works with `npm run dev` too.
 
 ## Add your own lessons
 
@@ -142,6 +157,9 @@ Run `npm run providers`. The CLI needs to be on your `PATH` in the same terminal
 
 **"Port 4317 is busy."**
 Use another one: `npm start -- --port 4400`.
+
+**"--model needs --provider too."**
+Name the tool the model belongs to: `npm start -- --provider claude --model sonnet`. The same goes for `CW_MODEL` and `CW_PROVIDER`.
 
 **The feedback came back garbled.**
 Click again. Small local models (via Ollama) sometimes struggle with the expected format; a bigger model helps.

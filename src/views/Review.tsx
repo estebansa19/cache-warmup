@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { lessonById } from "../content/lessons";
+import { useEffect, useRef, useState } from "react";
+import { cardByKey } from "../content/lessons";
 import { hrefFor } from "../router";
 import { useProgress } from "../state/ProgressContext";
-import { cardFor } from "../state/selectors";
 import { TIERS, dueCardKeys } from "../state/srs";
 import { prettyDay, today } from "../utils/dates";
+import { focusFirst } from "../utils/focus";
 import { shuffledIndexes } from "../utils/shuffle";
 import "./Review.css";
 
@@ -18,11 +18,20 @@ type Session = {
 };
 
 const SESSION_SIZE = 20;
-const exists = (key: string) => Boolean(cardFor(key, lessonById));
+const exists = (key: string) => cardByKey.has(key);
 
 export function Review() {
   const { progress, dispatch } = useProgress();
   const [session, setSession] = useState<Session | null>(null);
+  const page = useRef<HTMLDivElement>(null);
+
+  // The button you pressed goes away (Start, Show answer, Got it), so move focus to what's new:
+  // the card's question, its answer once flipped, or the summary when the session ends.
+  useEffect(() => {
+    if (!session) return;
+    if (session.index >= session.queue.length) focusFirst(page.current, "h1");
+    else focusFirst(page.current, session.flipped ? ".card-back" : ".card-front");
+  }, [session]);
   const now = today();
   const due = dueCardKeys(progress.cards, now, exists);
   const all = Object.keys(progress.cards).filter(exists);
@@ -105,7 +114,7 @@ export function Review() {
 
   if (session.index >= session.queue.length) {
     return (
-      <div className="review">
+      <div className="review" ref={page}>
         <div className="review-head">
           <h1>{session.mode === "practice" ? "Practice done" : "Review done"}</h1>
         </div>
@@ -137,11 +146,11 @@ export function Review() {
   }
 
   const key = session.queue[session.index];
-  const card = cardFor(key, lessonById)!;
-  const tier = TIERS[progress.cards[key]?.box ?? 0];
+  const card = cardByKey.get(key)!;
+  const tier = TIERS[progress.cards[key]?.box ?? 0] ?? TIERS[0];
 
   return (
-    <div className="review">
+    <div className="review" ref={page}>
       <div className="review-head">
         <h1>{session.mode === "practice" ? "Practice" : "Review"}</h1>
         <span className="mono-note">

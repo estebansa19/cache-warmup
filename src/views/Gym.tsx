@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SCORE_LABELS } from "../ai/prompt";
+import { SCORE_LABELS } from "../ai/feedback";
 import { InterviewRep, type InterviewQuestion } from "../components/InterviewRep";
 import { extraQuestions, lessons } from "../content/lessons";
 import { useProgress } from "../state/ProgressContext";

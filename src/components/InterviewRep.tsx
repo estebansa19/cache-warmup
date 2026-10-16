@@ -1,7 +1,6 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAI } from "../ai/AIContext";
 import { AIError } from "../ai/client";
-import { feedbackPrompt, toFeedback } from "../ai/prompt";
 import { hrefFor } from "../router";
 import { useProgress } from "../state/ProgressContext";
 import { today } from "../utils/dates";
@@ -30,9 +29,29 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
   const [showAnswer, setShowAnswer] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  const stopButton = useRef<HTMLButtonElement>(null);
+  const askButton = useRef<HTMLButtonElement>(null);
+  const result = useRef<HTMLDivElement>(null);
+  const wasBusy = useRef(false);
   const hasStrongAnswer = Boolean(question.answer || question.rubric?.length);
   const aiOn = Boolean(ai.status?.enabled);
+
+  // Leaving the question (or the page) stops the request, so the AI tool stops too.
+  useEffect(() => () => abort.current?.abort(), []);
+
+  // The feedback button is replaced while waiting: focus Stop, then whatever came back.
+  useEffect(() => {
+    if (busy) stopButton.current?.focus();
+    else if (wasBusy.current) {
+      const target =
+        result.current?.querySelector<HTMLElement>(".error-text:not(:empty), .feedback") ?? askButton.current;
+      if (target && target !== askButton.current) target.tabIndex = -1;
+      target?.focus();
+    }
+    wasBusy.current = busy;
+  }, [busy]);
 
   async function askForFeedback() {
     if (words(draft) < 25) {
@@ -40,17 +59,21 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
       return;
     }
     setError(null);
+    setDone(false);
     setBusy(true);
     abort.current = new AbortController();
     try {
-      const prompt = feedbackPrompt(
-        { question: question.question, rubric: question.rubric ?? null },
-        draft,
-        progress.profile,
+      const feedback = await ai.ask(
+        {
+          question: question.question,
+          rubric: question.rubric ?? null,
+          answer: draft,
+          profile: progress.profile,
+        },
+        abort.current.signal,
       );
-      const feedback = toFeedback(await ai.ask(prompt, abort.current.signal));
-      if (!feedback) throw new AIError("invalid_json");
       dispatch({ type: "feedback", key: id, feedback, today: today() });
+      setDone(true);
     } catch (e) {
       const err = e instanceof AIError ? e : new AIError("unreachable");
       if (err.code !== "cancelled")
@@ -81,7 +104,7 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
 
       <div className="row">
         {aiOn && !busy && (
-          <button className="btn" onClick={askForFeedback}>
+          <button className="btn" ref={askButton} onClick={askForFeedback}>
             {state.fb ? "Get fresh feedback" : "Get interviewer feedback"}
           </button>
         )}
@@ -91,7 +114,7 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
           </button>
         )}
         {hasStrongAnswer && (
-          <button className="btn ghost" onClick={toggleAnswer}>
+          <button className="btn ghost" onClick={toggleAnswer} aria-expanded={showAnswer}>
             {showAnswer ? "Hide the strong answer" : "Compare with a strong answer"}
           </button>
         )}
@@ -113,14 +136,21 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
       {busy && (
         <div className="thinking">
           <span className="pulse" />
-          <span>The interviewer is reading your answer…</span>
-          <button className="btn ghost small" onClick={() => abort.current?.abort()}>
+          <span aria-hidden="true">The interviewer is reading your answer…</span>
+          <button className="btn ghost small" ref={stopButton} onClick={() => abort.current?.abort()}>
             Stop
           </button>
         </div>
       )}
-      {error && <p className="error-text">{error}</p>}
-      {!busy && state.fb && <FeedbackCard feedback={state.fb} day={state.fbAt} />}
+      <p role="status" className="live sr-only">
+        {busy ? "The interviewer is reading your answer." : done ? "Feedback is ready." : ""}
+      </p>
+      <div ref={result}>
+        <p role="alert" className="error-text live">
+          {error}
+        </p>
+        {!busy && state.fb && <FeedbackCard feedback={state.fb} day={state.fbAt} />}
+      </div>
 
       {!hasStrongAnswer && !aiOn && ai.phase !== "checking" && (
         <div className="strong-answer">
@@ -140,8 +170,8 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
             <>
               <h3>What a strong answer covers</h3>
               <ul className="rubric">
-                {question.rubric.map((item) => (
-                  <li key={item}>{item}</li>
+                {question.rubric.map((item, i) => (
+                  <li key={i}>{item}</li>
                 ))}
               </ul>
             </>

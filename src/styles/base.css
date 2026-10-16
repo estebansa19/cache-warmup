@@ -70,6 +70,15 @@ mark {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+/* Live regions stay on the page so screen readers notice new text; while empty they take no space. */
+.live:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+}
 
 /* ---------- layout ---------- */
 .page {
@@ -184,16 +193,6 @@ mark {
   border-color: var(--bad);
   background: transparent;
 }
-.link-button {
-  background: none;
-  border: 0;
-  padding: 0;
-  color: var(--cobalt);
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 .pill {
   font-family: var(--f-mono);
   font-size: 0.72rem;
@@ -239,6 +238,21 @@ mark {
 .notice.error {
   background: var(--bad-bg);
   color: var(--bad);
+}
+
+/* The error boundary's page. */
+.crash {
+  padding: 24px;
+  display: grid;
+  gap: 14px;
+  max-width: 64ch;
+}
+.crash-detail {
+  margin: 0;
+  font-family: var(--f-mono);
+  font-size: var(--step--1);
+  white-space: pre-wrap;
+  color: var(--ink-2);
 }
 
 /* Bullet list of one-line takeaways (recap and cheat sheets). */
@@ -368,7 +382,6 @@ textarea.ruled {
   line-height: 1.6em;
 }
 textarea.ruled:focus {
-  outline: none;
   border-color: var(--ink);
 }
 @media (prefers-reduced-motion: reduce) {

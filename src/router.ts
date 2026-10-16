@@ -20,7 +20,13 @@ export type Route =
 
 export function parseRoute(hash: string): Route {
   const [view, id] = hash.replace(/^#\/?/, "").split("/");
-  if (view === "lesson" && id) return { view: "lesson", id: decodeURIComponent(id) };
+  if (view === "lesson" && id) {
+    try {
+      return { view: "lesson", id: decodeURIComponent(id) };
+    } catch {
+      return { view: "home" }; // a malformed link, like #/lesson/%E0
+    }
+  }
   if (view === "review" || view === "gym" || view === "notes" || view === "settings") return { view };
   return { view: "home" };
 }
