@@ -1,0 +1,174 @@
+---
+id: "http"
+title: "HTTP, the web & APIs"
+track: "Systems"
+mins: 25
+tag: "The 'what happens when you type a URL' answer, crisp."
+cards:
+  - ["401 vs 403", "401: not authenticated. 403: authenticated but not allowed."]
+  - ["Is POST idempotent?", "No. Hence Idempotency-Key headers."]
+  - ["202 Accepted means…", "Request accepted; processing will finish asynchronously."]
+  - ["HTTP/2's remaining weakness", "TCP head-of-line blocking (fixed by HTTP/3 over QUIC/UDP)."]
+  - ["Why cursor pagination?", "Fast via index seek and stable under inserts; offset scans and shifts."]
+  - ["What leaks the domain over HTTPS?", "DNS lookups and TLS SNI (unless DoH + ECH)."]
+---
+
+'What happens when you type a URL and hit enter?' is still asked in 2026. It's a fishing question: <mark>they want to see how deep you can go</mark>, and where you choose to stop.
+
+<Order>
+
+Put the journey of https://shop.example/cart in order.
+
+1. DNS resolves shop.example to an IP (browser/OS cache, then resolver)
+2. TCP connection (3-way handshake) to that IP
+3. TLS handshake: certificate check, key exchange
+4. Browser sends the HTTP request
+5. Load balancer → Puma → Rack middleware → router → controller
+6. Response returns; browser parses HTML and fetches CSS/JS/images
+
+<Why>
+
+Name each hop in a sentence, then offer to go deeper on any one. HTTP/3 merges the transport and TLS handshakes over QUIC (UDP), which is a nice detail to drop.
+
+</Why>
+
+</Order>
+
+## Methods: safe vs idempotent
+
+**Safe** = no side effects. **Idempotent** = repeating it has the same effect as doing it once.
+
+| Method | Safe | Idempotent | Typical use |
+| --- | --- | --- | --- |
+| GET | ✓ | ✓ | Read |
+| PUT |  | ✓ | Replace a resource |
+| DELETE |  | ✓ | Remove (second call: still gone) |
+| PATCH |  | not guaranteed | Partial update |
+| POST |  | ✗ | Create / trigger an action |
+
+<Note>
+
+That ✗ on POST is why payment and shipment APIs accept an Idempotency-Key header.
+
+</Note>
+
+## Status codes that come up
+
+- **201** created, **202** accepted (processing async), **204** no content
+- **301/302** redirect, **304** not modified (ETag cache hit)
+- **400** malformed, **401** who are you?, **403** I know who you are, and no
+- **404**, **409** conflict (state or version clash), **422** valid JSON but invalid data, **429** slow down
+- **500** our bug, **502** bad gateway, **503** unavailable/overloaded, **504** upstream timeout
+
+<Quiz>
+
+A logged-in user requests another account's invoice. Correct status?
+
+- [ ] 401 Unauthorized
+- [x] 403 Forbidden, or 404 to avoid revealing that it exists
+- [ ] 400 Bad Request
+- [ ] 500
+
+<Why>
+
+401 means 'not authenticated'. They are authenticated, just not allowed, so 403. Many APIs return 404 so they don't leak that the ID exists. Both are defensible; 401 isn't.
+
+</Why>
+
+</Quiz>
+
+## HTTP/1.1, 2, and 3 in three lines
+
+**1.1**: keep-alive connections, one request at a time per connection, so browsers open several. **2**: multiplexes many streams over one TCP connection with header compression, but one lost packet stalls them all (TCP head-of-line blocking). **3**: runs over <mark>QUIC on UDP</mark>, streams are independent, and it has faster handshakes.
+
+## API styles and pagination
+
+- **REST**: resources + HTTP semantics, cacheable, simple. Can over- or under-fetch.
+- **GraphQL**: the client picks its fields, so it's great for varied UIs. HTTP caching is harder and N+1s hide in resolvers (batch loaders).
+- **gRPC**: protobuf contracts, fast, streaming. Good service-to-service, awkward for browsers.
+- **Webhooks**: you call them when something happens.
+
+**Pagination:** offset (`?page=500`) gets slow and skips or duplicates rows when data shifts. <mark>Cursor/keyset</mark> (`?after=inv_9182`) stays fast and stable.
+
+<Quiz>
+
+Why prefer cursor (keyset) pagination for a large, frequently-written invoices list?
+
+- [ ] It's easier to jump to page 500
+- [x] Stable results while rows are inserted, and it seeks via the index instead of counting past OFFSET rows
+- [ ] It uses less JSON
+- [ ] Browsers require it
+
+<Why>
+
+OFFSET 100000 makes the DB walk and discard 100k rows, and inserts shift every page. A keyset (`WHERE id < last_seen ORDER BY id DESC LIMIT 50`) avoids both. The trade-off: no random page jumps.
+
+</Why>
+
+</Quiz>
+
+<Myth fact={false}>
+
+With HTTPS, your ISP can't see which website you're visiting.
+
+<Why>
+
+HTTPS encrypts paths, headers, and bodies, but the domain usually leaks through DNS lookups and the TLS SNI field (unless DNS-over-HTTPS and Encrypted Client Hello are in play). The IP address is always visible.
+
+</Why>
+
+</Myth>
+
+<Quiz>
+
+Which methods are idempotent by definition?
+
+- [x] GET, PUT, DELETE
+- [ ] GET, POST
+- [ ] POST, PATCH
+- [ ] Only GET
+
+<Why>
+
+GET, HEAD, PUT, DELETE (and OPTIONS) are idempotent. POST isn't, and PATCH depends on how you design it.
+
+</Why>
+
+</Quiz>
+
+<Interview>
+
+Design a public REST API for creating shipments that's safe for clients to retry.
+
+<Rubric>
+
+- Clear resource design (POST /shipments, GET /shipments/:id, etc.)
+- Idempotency-Key header on POST, stored with the response and replayed on retry
+- Correct status codes: 201 vs 202 for async label creation, 409/422 for errors, consistent error body
+- Rate limiting with 429 + Retry-After
+- Cursor pagination for lists; versioning strategy
+- Auth (API keys/OAuth scopes) and webhooks for status changes
+
+</Rubric>
+
+<Answer>
+
+`POST /v1/shipments` with an **Idempotency-Key** header. Store key → (request hash, response) for ~24h. Same key and same body replays the stored response; same key with a different body returns 422 or 409.
+
+Label creation calls carriers, so it's slow: return **202** with the shipment in `pending` state, then deliver a `shipment.label_ready` webhook (signed, retried). `GET /v1/shipments/:id` for polling.
+
+Errors: one consistent JSON shape with a machine-readable code. **429** with Retry-After. Lists use cursor pagination. API keys scoped per account, with authorization checked on every object (no IDOR). Version in the path or a header, and never break v1 in place.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- URL journey: DNS → TCP → TLS → HTTP → LB → app → render.
+- GET/PUT/DELETE idempotent. POST needs idempotency keys.
+- 401 = who are you. 403 = no. 422 = invalid data. 429 = slow down.
+- HTTP/3 = QUIC over UDP.
+- Cursor pagination for big, changing lists.
+
+</CheatSheet>

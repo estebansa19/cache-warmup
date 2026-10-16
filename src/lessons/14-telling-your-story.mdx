@@ -1,0 +1,174 @@
+---
+id: "story"
+title: "Telling your story"
+track: "Craft"
+mins: 30
+tag: "Technical rounds get you to maybe. This gets you to yes."
+cards:
+  - ["How much of a STAR answer should be Action?", "~70%, in 'I' language."]
+  - ["Tell me about yourself: structure", "90 seconds: present → past → why this role."]
+  - ["Strong Result has…", "A number, business impact, and a lesson learned."]
+  - ["Answering 'why are you looking' after layoffs", "Brief, no bitterness, pivot to what draws you to this role."]
+  - ["How many stories in a story bank?", "6–8, each adaptable to several questions."]
+  - ["Two-way door decision", "Reversible: decide fast. One-way door: slow down and gather data."]
+---
+
+The technical rounds get you to 'maybe'. The behavioral round gets you to 'yes'. At senior level they're checking one thing: <mark>would I trust this person with an ambiguous, important problem?</mark> You answer that with stories, and you've got good ones.
+
+## What senior behavioral rounds measure
+
+- **Scope and impact**: did the work matter beyond your ticket?
+- **Ambiguity**: what did you do when nobody knew the answer?
+- **Influence**: changing minds without authority.
+- **Ownership**: incidents, mistakes, follow-through.
+- **Growing others**: mentoring, raising the bar.
+- **Judgment**: trade-offs, saying no, knowing when 'good enough' is right.
+
+## STAR, tightened
+
+**S**ituation: 2 sentences of context. **T**ask: your specific responsibility. **A**ction: <mark>about 70% of the answer, in 'I' language</mark>: what you decided, why, and what you said to whom. **R**esult: numbers, outcomes, and what you learned or would change.
+
+The most common failure is 2 minutes of situation and 20 seconds of action. Aim for 2–3 minutes total.
+
+<Order>
+
+Put a strong STAR answer in order.
+
+1. Context in two sentences: team, system, stakes
+2. Your specific responsibility and what made it hard
+3. What you did and why, including the trade-offs you weighed
+4. Outcome with numbers
+5. What you learned / would do differently
+
+<Why>
+
+Ending on the lesson learned shows self-awareness, and it's often what the interviewer writes down.
+
+</Why>
+
+</Order>
+
+## Build a story bank
+
+Prepare 6–8 stories you can bend toward many questions. Go through these prompts and write one line from your own career for each:
+
+| Story prompt | Answers questions about |
+| --- | --- |
+| Something you helped build or scale from an early stage | Scaling, ambiguity, building from scratch |
+| A time you led people, formally or not | Leadership, mentoring, delegation, conflict |
+| A legacy system you rewrote, migrated, or untangled | Technical judgment, risk, migrations, influence |
+| A design or abstraction you're proud of (and its trade-offs) | Architecture, judgment |
+| An integration or dependency that broke in production | Reliability, incidents, ownership |
+| A feature where correctness really mattered (money, data, security) | Rigor, cross-team work |
+| Something you started without being asked (tooling, process, AI workflows) | Initiative, leverage, staying current |
+
+<Note>
+
+For each one, write down a number (time saved, customers onboarded, incidents reduced, PR cycle time) and one thing that went wrong. Stories with friction are more believable.
+
+</Note>
+
+<Quiz>
+
+Which 'Result' is strongest?
+
+- [ ] It went well and everyone was happy
+- [ ] We shipped it
+- [x] We cut the nightly job from 40 to 6 minutes, which let finance close a day earlier. Next time I'd add the monitoring before the rewrite, not after
+- [ ] The team learned a lot
+
+<Why>
+
+Specific, quantified, tied to business impact, and it ends with a self-aware lesson.
+
+</Why>
+
+</Quiz>
+
+## The questions you will get
+
+- **Tell me about yourself**: 90 seconds, present → past → why this role. Not a CV recital.
+- A conflict with a colleague or manager.
+- A failure or a production incident you caused.
+- A decision made with incomplete information.
+- Pushing back on a product or technical direction.
+- The project you're proudest of.
+- **Why are you looking?** Keep it forward-looking and positive.
+
+<Quiz>
+
+Your company just had layoffs and the mood is uncertain. Best answer to 'Why are you looking?'
+
+- [ ] Complain about leadership
+- [ ] Say you're not really looking
+- [x] 'There's been some reorganization, and it made me think about what I want next: [specific thing this role offers]. That's why this role caught my attention.'
+- [ ] Talk mostly about salary
+
+<Why>
+
+Honest, brief, no bitterness, and it pivots to what you're moving toward. Interviewers want to hear what pulls you to them, not what pushes you away.
+
+</Why>
+
+</Quiz>
+
+<Myth fact={false}>
+
+In behavioral answers, say 'we' throughout to show you're a team player.
+
+<Why>
+
+Credit the team for context and results, but the Action has to be 'I'. The interviewer is hiring you and needs to know what you specifically did and decided.
+
+</Why>
+
+</Myth>
+
+## Questions to ask them
+
+Good questions show judgment and help you decide:
+
+- 'What would make someone in this role clearly successful after six months?'
+- 'What's the hardest technical problem the team is facing right now?'
+- 'How are technical decisions made and written down?'
+- 'How does on-call work, and what was the last major incident like?'
+- 'What changed on the team in the past year?' (a gentle way to ask about stability)
+
+<Interview>
+
+Tell me about a time you had to make an important technical decision with incomplete information.
+
+<Rubric>
+
+- Clear, brief situation with real stakes
+- Specific about their own role and the uncertainty involved
+- Explains how they reduced uncertainty (spikes, data, asking experts) and the options weighed
+- Made the call with reversibility in mind (two-way vs one-way door), communicated it
+- Concrete result, ideally quantified
+- Reflection: what they learned or would change; uses 'I' for actions
+
+</Rubric>
+
+<Answer>
+
+**S:** 'At a fast-growing hotel platform, we had to decide whether to keep extending our booking engine or rebuild the pricing piece, with a big partner launch six weeks out.'
+
+**T:** 'As tech lead, I owned the recommendation.'
+
+**A:** 'We didn't know how pricing load would grow. I ran a one-week spike with production traces to estimate it, listed options with their reversibility, and chose to isolate pricing behind an interface so we could swap it later. That was a two-way door. I wrote it up and got buy-in from product by showing the launch risk of each option.'
+
+**R:** 'We launched on time; three months later we swapped the implementation in two weeks without touching callers.' **Learned:** 'Separate the reversible decisions from the irreversible ones early.' (Use your real numbers.)
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- Senior = trusted with ambiguous, important problems.
+- STAR with ~70% Action, 'I' for actions, numbers in Results.
+- 6–8 stories, each with a number and some friction.
+- Why looking: forward-looking, brief, positive.
+- Ask questions that help you decide too.
+
+</CheatSheet>

@@ -1,0 +1,171 @@
+---
+id: "patterns"
+title: "Patterns you already use"
+track: "Foundations"
+mins: 20
+tag: "Put names on the shapes you've been writing for years."
+cards:
+  - ["Adapter vs Facade", "Adapter translates one interface; Facade simplifies many."]
+  - ["SimpleDelegator presenter is which pattern?", "Decorator."]
+  - ["ActiveRecord::Relation chaining resembles…", "Builder: fluent, lazily executed."]
+  - ["Pattern to remove `if user.nil?` everywhere", "Null Object."]
+  - ["Observer's main downside", "Action at a distance: hidden side effects."]
+  - ["Rule of three", "Abstract on the third real occurrence, not the first."]
+---
+
+You've written a dozen of these in Rails without calling them by name. <mark>Interviews want the name plus the trade-off.</mark> That's the whole trick: the vocabulary lets you explain a design in one sentence.
+
+## Three families
+
+**Creational**: how objects get made (Factory, Builder, Singleton). **Structural**: how objects fit together (Adapter, Decorator, Facade). **Behavioral**: how objects talk and split work (Strategy, Observer, Template Method, Command).
+
+## Strategy
+
+Swap an algorithm at runtime behind one interface.
+
+```ruby
+class DailyProration;  def amount(plan, days) = plan.daily_rate * days; end
+class NoProration;     def amount(plan, _)    = plan.price; end
+
+proration = account.prorates? ? DailyProration.new : NoProration.new
+invoice.add_line(proration.amount(plan, remaining_days))
+```
+
+<Note>
+
+Strategy is how you fix the Open/Closed smell from lesson 3.
+
+</Note>
+
+## Adapter and Facade
+
+**Adapter**: make an awkward interface look like the one you want. Each carrier's API gets a `FedexAdapter#quote` that returns your own `Quote` object.
+
+**Facade**: one simple entry point over a messy subsystem. `Shipping.book(order)` hides quoting, label creation, pickup scheduling, and tracking registration.
+
+Difference: an adapter <mark>translates</mark> one interface, a facade <mark>simplifies</mark> many.
+
+## Decorator
+
+Add behavior by wrapping an object, without subclassing it. Presenters are decorators.
+
+```ruby
+class InvoicePresenter < SimpleDelegator
+  def display_total = format("$%.2f", total / 100.0)
+end
+
+InvoicePresenter.new(invoice).display_total
+# every other method still goes to invoice
+```
+
+## Observer (and its dark side)
+
+Publishers announce events and subscribers react without the publisher knowing who's listening. `ActiveSupport::Notifications`, model callbacks, and webhooks are all observer-shaped.
+
+The trade-off: decoupling becomes <mark>action at a distance</mark>. Saving a model fires a callback that enqueues a job that sends an email, and nobody reading `save` can tell.
+
+## Factory, Builder, Null Object, Template Method
+
+- **Factory**: centralize 'which class do I instantiate?' FactoryBot is named after it.
+- **Builder**: assemble a complex object step by step. `Order.where(...).order(...).limit(10)` is a fluent builder that only runs the SQL at the end.
+- **Null Object**: a `GuestUser` that answers like a user, so you stop writing `if user.nil?`.
+- **Template Method**: a base class defines the steps and subclasses fill in hooks, like a base importer with `parse` and `persist`.
+
+<Quiz>
+
+`Invoice.where(status: :open).order(:due_on).limit(20)`, where nothing hits the DB until you iterate. Which pattern is closest?
+
+- [ ] Singleton
+- [x] Builder (fluent interface, lazy execution)
+- [ ] Observer
+- [ ] Adapter
+
+<Why>
+
+Each call returns a new relation with one more piece configured. The query is only built and run at the end. Classic builder.
+
+</Why>
+
+</Quiz>
+
+<Quiz>
+
+You wrap each carrier's SDK so they all return your `Quote` struct. Pattern?
+
+- [ ] Facade
+- [x] Adapter
+- [ ] Decorator
+- [ ] Strategy
+
+<Why>
+
+Translating a foreign interface into the one your code expects is an Adapter. Picking which adapter to use at runtime would be Strategy layered on top.
+
+</Why>
+
+</Quiz>
+
+<Quiz>
+
+Views are full of `user ? user.name : "Guest"`. Cleanest fix?
+
+- [x] A Null Object (`GuestUser`) that responds to the same methods
+- [ ] A global helper
+- [ ] Singleton
+- [ ] Rescue NoMethodError
+
+<Why>
+
+A Null Object removes the conditional from every call site and gives the 'nobody' case explicit, testable behavior.
+
+</Why>
+
+</Quiz>
+
+<Myth fact={false}>
+
+Singletons are a clean way to share mutable state across an app.
+
+<Why>
+
+A mutable singleton is a global variable in a nice suit. It makes tests order-dependent and breaks under threads. Fine for immutable config, risky for anything that changes.
+
+</Why>
+
+</Myth>
+
+<Interview>
+
+When do design patterns hurt? Give me an example of over-engineering you've seen (or done), and how you decide when an abstraction is worth it.
+
+<Rubric>
+
+- Honest, specific example of premature abstraction
+- Names the cost: indirection, harder onboarding, wrong abstraction locked in
+- Has a decision heuristic (rule of three, YAGNI, cost of change later)
+- Mentions that duplication can be cheaper than the wrong abstraction
+- Shows how they reversed or simplified it
+
+</Rubric>
+
+<Answer>
+
+Patterns hurt when they come before the problem. Example: a payment 'provider framework' with factories, registries, and adapters, built when there was exactly one provider. Every change touched five files and new engineers had to learn the framework before they could fix a bug.
+
+**Heuristic:** wait for the second or third real case (rule of three). Duplication is cheaper than the wrong abstraction. Ask how expensive the change would be later, and if it's cheap, defer it.
+
+**Reversal:** inline the indirection, keep a single adapter boundary at the external API, delete the rest.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- Strategy swaps algorithms; Adapter translates; Facade simplifies.
+- Decorator wraps to add behavior (presenters).
+- Observer decouples but hides side effects.
+- Builder = fluent, lazy (AR relations).
+- Duplication beats the wrong abstraction.
+
+</CheatSheet>

@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          # The oldest Node the app supports (package.json "engines"); 22 resolves to the latest 22.x.
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Formatting, types, and tests (includes validating every lesson)
+        run: npm run check
+      - name: Build
+        run: npm run build

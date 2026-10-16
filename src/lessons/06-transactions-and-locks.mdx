@@ -1,0 +1,188 @@
+---
+id: "tx"
+title: "Transactions, isolation & locks"
+track: "Data"
+mins: 25
+tag: "How two workers manage to charge the same card twice."
+cards:
+  - ["Postgres default isolation level", "Read Committed. (MySQL InnoDB: Repeatable Read.)"]
+  - ["Lost update fix for counters", "Atomic SQL: update_counters / SET n = n + 1."]
+  - ["Rails pessimistic lock", "with_lock / lock! → SELECT … FOR UPDATE."]
+  - ["Rails optimistic lock", "lock_version column → StaleObjectError on conflict."]
+  - ["Deadlock prevention", "Lock in a consistent order, keep transactions short, retry victims."]
+  - ["Why no HTTP calls inside DB transactions?", "Locks held during network I/O, and rollback can't undo the external side effect."]
+---
+
+Two Sidekiq workers both read 'invoice unpaid'. Both charge the card. The customer paid twice and support is not happy. <mark>Welcome to isolation levels.</mark>
+
+## ACID with a billing accent
+
+- **Atomicity**: the invoice is marked paid and the payment row is inserted together, or neither happens.
+- **Consistency**: constraints hold before and after (no negative balance if a CHECK forbids it).
+- **Isolation**: concurrent transactions don't see each other's half-done work. <mark>How strictly is configurable</mark>, and that's where the bugs live.
+- **Durability**: once committed, a crash won't lose it (write-ahead log).
+
+## The anomalies, from mild to sneaky
+
+- **Dirty read**: you see uncommitted data. Postgres never allows this.
+- **Non-repeatable read**: you read a row twice in one transaction and get different values.
+- **Phantom**: re-running a query returns new rows.
+- **Lost update**: two read-modify-writes and one silently overwrites the other.
+- **Write skew**: two transactions each check a condition, then each write, and together they break the rule (two on-call engineers both go off call).
+
+| Level | What it adds |
+| --- | --- |
+| Read Committed (Postgres default) | Each statement sees the latest committed data |
+| Repeatable Read (MySQL default) | One snapshot for the whole transaction |
+| Serializable | As if transactions ran one at a time; may abort with a serialization error, so retry |
+
+<Quiz>
+
+What isolation level does PostgreSQL use by default?
+
+- [ ] Read Uncommitted
+- [x] Read Committed
+- [ ] Repeatable Read
+- [ ] Serializable
+
+<Why>
+
+Read Committed. A transaction alone does *not* stop two workers from both reading 'unpaid'. MySQL/InnoDB defaults to Repeatable Read.
+
+</Why>
+
+</Quiz>
+
+## The lost update, in Ruby
+
+Read-modify-write in application code is the most common concurrency bug in Rails apps.
+
+```ruby
+# Two requests at once. Both read 100, both write 110. One +10 vanishes.
+account.balance += 10
+account.save!
+
+# Fix 1: atomic update in SQL
+Account.update_counters(account.id, balance: 10)
+
+# Fix 2: pessimistic lock (SELECT ... FOR UPDATE)
+account.with_lock { account.update!(balance: account.balance + 10) }
+
+# Fix 3: optimistic lock with a lock_version column
+# the second save raises ActiveRecord::StaleObjectError → retry
+```
+
+## Pessimistic vs optimistic
+
+**Pessimistic**: lock the row up front and make others wait. Good when conflicts are likely and the critical section is short.
+
+**Optimistic**: don't lock; detect the conflict at write time with a version check and retry. Good when conflicts are rare, like two admins rarely editing the same plan.
+
+A third option that's often best: a <mark>conditional UPDATE</mark> that only succeeds from the expected state.
+
+```ruby
+claimed = Invoice.where(id: id, state: "unpaid")
+                 .update_all(state: "charging")
+return if claimed.zero?  # someone else got it
+```
+
+<Quiz>
+
+A counter column is incremented from many workers. Cheapest correct fix?
+
+- [ ] Wrap it in a transaction
+- [x] `update_counters` / `SET n = n + 1` in SQL
+- [ ] Add a Ruby mutex
+- [ ] Use a bigger server
+
+<Why>
+
+Let the database do the arithmetic atomically. A transaction at Read Committed doesn't prevent the lost update, and a Ruby mutex only protects one process.
+
+</Why>
+
+</Quiz>
+
+## Deadlocks and the HTTP-call-in-a-transaction trap
+
+**Deadlock**: T1 locks A and wants B, while T2 locks B and wants A. Postgres detects it and kills one. Prevention: lock rows in a <mark>consistent order</mark>, keep transactions short, and retry the victim.
+
+**The trap:** calling a payment gateway inside a transaction. You hold row locks for the whole HTTP round trip, and if the transaction rolls back afterward, the charge already happened. A rollback can't un-charge a card.
+
+<Note>
+
+Pattern: claim the work (short transaction) → call the external API (no transaction) → record the result (short transaction). Use an idempotency key on the external call.
+
+</Note>
+
+<Myth fact={false}>
+
+Wrapping 'check unpaid, then charge' in a transaction prevents double charges.
+
+<Why>
+
+At Read Committed, both transactions can read 'unpaid' at the same time. You need a lock, a conditional UPDATE, a unique constraint, or Serializable with retries, plus an idempotency key on the gateway call.
+
+</Why>
+
+</Myth>
+
+<Quiz>
+
+Which situation favors optimistic locking?
+
+- [ ] Thousands of workers hammering the same counter row
+- [x] Admins occasionally editing the same plan settings
+- [ ] Reserving the last seat on a flight with heavy traffic
+- [ ] Never; always use pessimistic
+
+<Why>
+
+Optimistic locking costs nothing until a conflict happens, so it's ideal when conflicts are rare. Under heavy contention you'd spend all your time retrying.
+
+</Why>
+
+</Quiz>
+
+<Interview>
+
+How would you guarantee a customer is never charged twice for the same invoice, even with retries, timeouts, and concurrent workers?
+
+<Rubric>
+
+- Atomic claim of the work (conditional UPDATE / row lock / state machine)
+- Idempotency key sent to the payment gateway, derived from invoice + attempt
+- Unique constraint as a backstop (e.g., one successful payment per invoice)
+- Never holds a DB transaction open during the external HTTP call
+- Handles the unknown outcome of a timeout (query gateway / reconcile) instead of blindly retrying
+- Monitoring/reconciliation job to catch anything that slips
+
+</Rubric>
+
+<Answer>
+
+**Layered defense.**
+
+1) **Claim atomically:** `UPDATE invoices SET state='charging' WHERE id=$1 AND state='unpaid'`. Zero rows means someone else owns it.
+
+2) **Idempotent external call:** send an idempotency key like `invoice-123-attempt-1`. If the gateway sees it twice, it returns the original result instead of charging again.
+
+3) **Timeouts are 'unknown', not 'failed':** on timeout, look the charge up by that key before retrying.
+
+4) **Backstop:** a unique index on successful payments per invoice.
+
+5) **No transaction around HTTP.** Claim, call, record. Then a **reconciliation job** compares gateway records with ours nightly.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- ACID's 'I' is configurable. Postgres default is Read Committed.
+- Read-modify-write in Ruby = lost update. Do the math in SQL.
+- Conditional UPDATE is a great 'claim' primitive.
+- Pessimistic for hot rows, optimistic for rare conflicts.
+- Claim → call API (no tx) → record. Idempotency keys always.
+
+</CheatSheet>

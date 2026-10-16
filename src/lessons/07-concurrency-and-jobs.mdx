@@ -1,0 +1,187 @@
+---
+id: "jobs"
+title: "Concurrency, jobs & idempotency"
+track: "Systems"
+mins: 25
+tag: "At-least-once means sometimes twice."
+cards:
+  - ["What does the GVL mean for Ruby threads?", "One thread runs Ruby at a time; threads still overlap I/O waits."]
+  - ["Sidekiq delivery guarantee", "At-least-once. Jobs must be idempotent."]
+  - ["Exactly-once in practice is…", "At-least-once delivery + idempotent processing."]
+  - ["Idempotent: credits += 5 or credits = 50?", "credits = 50 (absolute value)."]
+  - ["Job enqueued in after_create → RecordNotFound. Fix?", "Enqueue in after_commit (or defer enqueue until commit)."]
+  - ["Why jitter?", "Avoid thundering herds of synchronized retries."]
+---
+
+Sidekiq promises at-least-once delivery. Read that again: <mark>at LEAST once</mark>. Every job you write will eventually run twice. The only question is whether that's harmless.
+
+## Concurrency vs parallelism (and the GVL)
+
+**Concurrency**: juggling several tasks over time. **Parallelism**: literally running them at the same instant.
+
+CRuby has a <mark>Global VM Lock</mark>: only one thread runs Ruby code at a time per process. But threads release it while waiting on I/O (DB, HTTP, Redis), so threads still help a lot for typical Rails work. For CPU-heavy work you need more processes.
+
+<Note>
+
+That's why Puma has workers (processes, true parallelism) × threads (overlap I/O waits), and why Sidekiq runs many threads per process.
+
+</Note>
+
+<Quiz>
+
+A Sidekiq process with 10 threads is resizing images (pure CPU, in Ruby). Adding threads barely helps. Why?
+
+- [ ] Redis is slow
+- [x] The GVL: only one thread executes Ruby at a time, and CPU work never releases it
+- [ ] Sidekiq caps at 10
+- [ ] Images are cached
+
+<Why>
+
+Threads overlap waiting, not computing. For CPU-bound work, run more processes (or push the work into a C extension or library that releases the GVL).
+
+</Why>
+
+</Quiz>
+
+## Race conditions: check-then-act
+
+Most races look like this: *check* a condition, then *act* on it, with a gap in between where the world changes.
+
+```ruby
+# Race: two threads both see nil, both create
+setting = Setting.find_by(key: k) || Setting.create!(key: k)
+
+# Better: let a unique index arbitrate
+Setting.create_or_find_by!(key: k)
+
+# Also a race: memoizing into shared class state across threads
+@@rates ||= expensive_load  # use a Mutex or load at boot
+```
+
+## Delivery guarantees
+
+- **At-most-once**: fire and forget. Might be lost, never duplicated.
+- **At-least-once**: retried until acknowledged. Never lost, sometimes duplicated. This is Sidekiq, SQS, and most webhooks.
+- **Exactly-once**: across a network, mostly a myth. What you can build is <mark>effectively-once = at-least-once + idempotent handling</mark>.
+
+<Myth fact={false}>
+
+Sidekiq runs each job exactly once.
+
+<Why>
+
+A worker can crash after doing the work but before acknowledging it, a deploy can kill a running job, or a retry can fire after partial success. Design every job to be safe to run twice.
+
+</Why>
+
+</Myth>
+
+## Making things idempotent
+
+Idempotent means doing it twice has the same effect as doing it once.
+
+- **Natural keys + unique index**: one shipment label per (order_id, attempt).
+- **Idempotency keys** for external APIs.
+- **Upserts**: `upsert_all` / `ON CONFLICT`.
+- **Set absolute values, not deltas**: `credits = 50` is idempotent; `credits += 5` isn't.
+- **State machines**: transitions only from the expected state.
+
+<Quiz>
+
+Which job is safe to run twice?
+
+- [ ] `user.increment!(:credits, 5)`
+- [x] `user.update!(plan: "pro", credits: 50)`
+- [ ] `Mailer.welcome(user).deliver_now`
+- [ ] `Payment.create!(amount: 10, user: user)`
+
+<Why>
+
+Setting absolute values gives the same result no matter how many times it runs. Incrementing, sending, and inserting all compound on retry unless guarded.
+
+</Why>
+
+</Quiz>
+
+## Retries done right
+
+- **Exponential backoff with jitter**: wait 1s, 2s, 4s… plus randomness, so 10,000 failed jobs don't all retry in the same second (a thundering herd).
+- **Don't retry what can't succeed**: a 422 won't fix itself, so send it to the dead set and alert.
+- **Timeouts on everything**: a hung HTTP call holds a thread forever.
+- **Enqueue after commit**: a job enqueued inside a transaction can run before the commit and hit `RecordNotFound`.
+
+<Quiz>
+
+`after_create { ChargeJob.perform_later(id) }`. The job sometimes fails with RecordNotFound. Why?
+
+- [ ] Redis lost the job
+- [x] The job ran before the surrounding transaction committed, so the row wasn't visible yet
+- [ ] IDs are reused
+- [ ] Sidekiq is out of threads
+
+<Why>
+
+`after_create` runs inside the transaction. Use `after_commit` (or Rails' option to defer Active Job enqueues until commit) so the worker can see the row.
+
+</Why>
+
+</Quiz>
+
+<Quiz>
+
+Why add jitter to exponential backoff?
+
+- [ ] Makes logs prettier
+- [x] Spreads retries out so failed jobs don't hammer the recovering service at the same instant
+- [ ] Required by HTTP
+- [ ] Reduces memory
+
+<Why>
+
+Without jitter, everything that failed together retries together, and the service that just came back up falls over again.
+
+</Why>
+
+</Quiz>
+
+<Interview>
+
+A carrier sends tracking webhooks that can arrive more than once and out of order. Design the handler.
+
+<Rubric>
+
+- Verifies authenticity (HMAC signature, timing-safe compare)
+- Persists the raw event with a unique provider event ID to dedupe
+- Acknowledges fast (2xx) and processes asynchronously
+- Handles ordering: compares event timestamps/sequence, or a state machine that ignores regressions
+- Idempotent processing, retries with backoff, dead-letter + alerting
+- Observability: metrics on lag, failures, duplicates
+
+</Rubric>
+
+<Answer>
+
+**1. Verify:** check the HMAC signature (timing-safe) and reject otherwise.
+
+**2. Store, then ack:** insert into `carrier_events` with a unique index on `(carrier, external_event_id)`. A duplicate hits the constraint, so return 200 and stop. Ack within milliseconds; never do the real work in the request.
+
+**3. Process async:** a job loads the event and applies it to the shipment.
+
+**4. Ordering:** keep `last_event_at` on the shipment and ignore older events, or model a state machine where `delivered` never goes back to `in_transit`.
+
+**5. Failure handling:** backoff with jitter, dead set, alerting, plus a replay tool, since you kept the raw payloads.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- GVL: threads for I/O, processes for CPU.
+- Check-then-act is a race. Let a unique index decide.
+- At-least-once + idempotency = effectively once.
+- Absolute values, upserts, unique keys, state machines.
+- Backoff + jitter, don't retry 4xx, enqueue after commit.
+
+</CheatSheet>
