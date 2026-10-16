@@ -1,0 +1,16 @@
+{
+  "name": "cache-warmup",
+  "version": "1.0.0",
+  "description": "Short, interactive lessons to refresh software engineering fundamentals, with an optional AI mock interviewer.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node serve.mjs --open",
+    "serve": "node serve.mjs",
+    "providers": "node serve.mjs --list"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
