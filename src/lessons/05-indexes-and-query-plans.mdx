@@ -1,0 +1,182 @@
+---
+id: "indexes"
+title: "Indexes & query plans"
+track: "Data"
+mins: 25
+tag: "Why the same SQL is 4 ms in staging and 9 s in prod."
+cards:
+  - ["Composite index column order rule", "Equality columns first, range/sort column last."]
+  - ["Index on (a, b): does WHERE b = ? use it well?", "Usually no, because of the leftmost prefix rule."]
+  - ["Estimated rows ≫ actual rows in EXPLAIN means…", "Stale statistics. Run ANALYZE."]
+  - ["Why does WHERE lower(email) = ? skip the email index?", "Different expression. Needs an expression index or citext."]
+  - ["Only real guarantee of uniqueness?", "A unique index (validations race)."]
+  - ["Add an index to a huge prod table safely in Rails?", "algorithm: :concurrently + disable_ddl_transaction!"]
+---
+
+A query runs in 4 ms in staging and 9 seconds in production. Same SQL, same code. <mark>Different data, so a different plan.</mark> This lesson is about reading what the database decided and nudging it toward a better choice.
+
+## What an index really is
+
+A B-tree index is a <mark>sorted copy of some columns, with pointers back to the rows</mark>. Because it's sorted and wide (hundreds of keys per page), it's usually only 3–4 levels deep even for hundreds of millions of rows. That's the log n from lesson 1, on disk.
+
+The cost: every insert or update maintains every index, and indexes take space and memory. More indexes means slower writes.
+
+## Composite indexes and the leftmost prefix
+
+An index on `(account_id, created_at)` is sorted by account first, then by date within each account. Think of a phone book sorted by last name, then first name.
+
+| Query | Uses the index well? |
+| --- | --- |
+| WHERE account_id = 7 | Yes (leftmost column) |
+| WHERE account_id = 7 ORDER BY created_at | Yes, rows come out pre-sorted |
+| WHERE account_id = 7 AND created_at > '2026-01-01' | Yes: equality, then range |
+| WHERE created_at > '2026-01-01' | Usually no, it skips the leading column |
+
+<Note>
+
+Rule: equality columns first, range or sort column last. PostgreSQL 18 added skip scan, which can rescue some leading-column-skipped queries, but don't design around it.
+
+</Note>
+
+<Quiz>
+
+Index on `(status, account_id)`. Which query is it worst for?
+
+- [ ] WHERE status = 'open' AND account_id = 9
+- [ ] WHERE status = 'open'
+- [x] WHERE account_id = 9
+- [ ] WHERE status IN ('open','late') AND account_id = 9
+
+<Why>
+
+The index is sorted by status first, so finding one account means looking inside every status group. Flip the order, or add an index that leads with account_id.
+
+</Why>
+
+</Quiz>
+
+## Reading EXPLAIN without fear
+
+`EXPLAIN ANALYZE` runs the query and shows the plan with real timings. What to look for:
+
+- **Seq Scan**: reads the whole table. Fine for small tables, bad on big ones.
+- **Index Scan / Index Only Scan**: uses the index; 'only' means it never touches the table.
+- **Bitmap Heap Scan**: collects matches from the index, then fetches pages in bulk.
+- <mark>Estimated rows vs actual rows</mark>: a big gap means stale statistics, so run `ANALYZE`.
+
+```sql
+EXPLAIN ANALYZE SELECT * FROM invoices WHERE account_id = 42;
+-- Index Scan using index_invoices_on_account_id on invoices
+--   (cost=0.57..812.33 rows=210 width=96)
+--   (actual time=0.031..0.402 rows=198 loops=1)
+```
+
+## Why the planner ignores your index
+
+- **Low selectivity**: `status` has 3 values and 'open' is 60% of rows, so scanning is cheaper.
+- **Function on the column**: `WHERE lower(email) = ?` can't use an index on `email`. You need an expression index on `lower(email)`, or `citext`.
+- **Leading wildcard**: `LIKE '%son'` can't walk a B-tree. Use a `pg_trgm` GIN index.
+- **Type mismatch**: comparing a text column to an integer forces a cast.
+- **Tiny table**: a Seq Scan is honestly faster.
+
+<Quiz>
+
+There's an index on `users.email`. This query still Seq Scans: `WHERE lower(email) = 'a@b.co'`. Why?
+
+- [ ] Postgres is broken
+- [x] The index stores raw email; lower(email) is a different expression. You need an index on lower(email)
+- [ ] Strings can't be indexed
+- [ ] It needs a LIMIT
+
+<Why>
+
+An index matches the expression it was built on. `add_index :users, "lower(email)"`, or the citext type, fixes it.
+
+</Why>
+
+</Quiz>
+
+## Indexes as tools, not just speed
+
+- **Unique index**: the only real guarantee of uniqueness. `validates :uniqueness` races under concurrency.
+- **Partial index**: `WHERE deleted_at IS NULL` or `WHERE status = 'past_due'`. Smaller and hotter.
+- **Covering index**: `INCLUDE (amount)` enables index-only scans.
+- **GIN**: jsonb, arrays, full-text, trigram.
+
+On a big production table, build indexes <mark>concurrently</mark> so writes aren't blocked:
+
+```ruby
+class AddIndexToInvoices < ActiveRecord::Migration[7.1]
+  disable_ddl_transaction!
+  def change
+    add_index :invoices, [:account_id, :due_on],
+      where: "status = 'past_due'", algorithm: :concurrently
+  end
+end
+```
+
+<Myth fact={false}>
+
+`validates :email, uniqueness: true` guarantees no duplicate emails.
+
+<Why>
+
+Two requests can both run the SELECT check, both see nothing, and both INSERT. Only a unique index makes the database refuse the second one. Keep the validation for friendly errors and add the index for correctness.
+
+</Why>
+
+</Myth>
+
+<Order>
+
+Put these steps for debugging a slow query in order.
+
+1. Reproduce it with EXPLAIN (ANALYZE, BUFFERS) on production-like data
+2. Compare estimated vs actual rows; refresh stats if they're far off
+3. Check which predicates and sort lack a matching index
+4. Add or adjust the index (concurrently in prod)
+5. Re-run the plan and measure p95 latency
+
+<Why>
+
+Measure → understand the planner's view → change one thing → verify. Skipping straight to 'add an index' is how tables end up with 14 unused indexes.
+
+</Why>
+
+</Order>
+
+<Interview>
+
+This is slow on a 300M-row table: SELECT \* FROM invoices WHERE account_id = $1 AND status = 'past_due' ORDER BY due_on DESC LIMIT 20. How do you fix it?
+
+<Rubric>
+
+- Starts with EXPLAIN ANALYZE rather than guessing
+- Proposes a composite index with equality columns first and the sort column last
+- Considers a partial index on status = 'past_due' (small and hot)
+- Builds it concurrently in production; considers write cost
+- Questions SELECT \* / suggests a covering index if useful; verifies afterward
+
+</Rubric>
+
+<Answer>
+
+**Look first:** `EXPLAIN (ANALYZE, BUFFERS)`. Probably a scan on `account_id` followed by filtering and sorting thousands of rows.
+
+**Index:** equality columns first, sort last: `(account_id, status, due_on DESC)`. If past-due is a small slice, a partial index is better: `(account_id, due_on DESC) WHERE status = 'past_due'`. It's tiny, stays in memory, and the rows come out pre-sorted, so LIMIT 20 stops after 20.
+
+**Ship safely:** `CREATE INDEX CONCURRENTLY`, check for unused indexes, re-run the plan, watch p95. Drop `SELECT *` if the caller only needs a few columns.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- Index = sorted copy of columns. Reads get faster, writes slower.
+- Equality first, range/sort last.
+- EXPLAIN ANALYZE: compare estimates vs actual.
+- Functions on columns and leading wildcards kill index use.
+- Partial, unique, covering, GIN. Build concurrently.
+
+</CheatSheet>

@@ -1,0 +1,170 @@
+---
+id: "security"
+title: "Security essentials"
+track: "Craft"
+mins: 20
+tag: "Don't be the reason the security team gets paged."
+cards:
+  - ["AuthN vs AuthZ", "Who are you vs what are you allowed to do."]
+  - ["IDOR fix in Rails", "Scope finds through the owner: current_account.invoices.find(id)."]
+  - ["Safe SQL with user input", "Parameterize: where(name: q) or where('x = ?', q)."]
+  - ["Rails XSS danger zones", "html_safe, raw, <%==, unsanitized markdown, javascript: URLs."]
+  - ["Password storage", "Slow salted hash: bcrypt/argon2. Never fast hashes or encryption."]
+  - ["OAuth vs OIDC", "OAuth = delegated authorization; OIDC adds identity (ID token)."]
+---
+
+You don't need to be a security engineer. You need to <mark>not be the reason the security engineer gets paged</mark>. Most real incidents come from a short list of mistakes, and code review is where you catch them.
+
+## AuthN vs AuthZ, and IDOR
+
+**Authentication**: who are you? **Authorization**: what are you allowed to do? Broken access control has topped the OWASP Top 10 lately, and the most common form is <mark>IDOR</mark> (Insecure Direct Object Reference): change the ID in the URL and you see someone else's data.
+
+```ruby
+# IDOR: any logged-in user can fetch any invoice
+@invoice = Invoice.find(params[:id])
+
+# Scoped: only finds invoices this account owns (404 otherwise)
+@invoice = current_account.invoices.find(params[:id])
+```
+
+<Quiz>
+
+Which line prevents IDOR for a download endpoint?
+
+- [ ] `Invoice.find(params[:id])`
+- [x] `current_account.invoices.find(params[:id])`
+- [ ] `Invoice.find_by(id: params[:id].to_i)`
+- [ ] Hiding the ID with base64
+
+<Why>
+
+Scope the lookup through the authorized owner, or use a policy object (Pundit, Action Policy). Obscured IDs aren't access control.
+
+</Why>
+
+</Quiz>
+
+## Injection
+
+If user input becomes code, it's injection. SQL is the classic case:
+
+```ruby
+# Vulnerable: q = "' OR '1'='1" returns everything
+User.where("name = '#{params[:q]}'")
+
+# Safe: parameterized
+User.where(name: params[:q])
+User.where("name ILIKE ?", "%#{User.sanitize_sql_like(params[:q])}%")
+```
+
+<Note>
+
+Same idea elsewhere: shell commands (pass arrays to system, never interpolated strings), `constantize` on user input, `send(params[:method])`.
+
+</Note>
+
+## XSS and CSRF
+
+**XSS**: an attacker gets script into your page, which runs as the victim. Rails escapes output by default; the danger zones are `html_safe`, `raw`, `<%==`, unsanitized markdown, and URLs like `javascript:`. Add a Content Security Policy as a second line of defense.
+
+**CSRF**: another site makes the victim's browser send a request with their cookies. Rails' authenticity token blocks it, and `SameSite=Lax` cookies help. Token-authenticated JSON APIs (no cookies) aren't exposed the same way.
+
+<Quiz>
+
+What does Rails' authenticity token protect against?
+
+- [ ] SQL injection
+- [x] Cross-site request forgery
+- [ ] Brute-force login
+- [ ] XSS
+
+<Why>
+
+The form must include a secret token the attacker's site can't read, so forged cross-site form posts fail.
+
+</Why>
+
+</Quiz>
+
+## Passwords, secrets, encryption
+
+- Passwords: <mark>hash with a slow, salted algorithm</mark> (bcrypt via `has_secure_password`, or argon2). Never encrypt them, and never use a fast hash.
+- Secrets live in Rails credentials or a secret manager, never in the repo or in logs. Rotate them, and scope them to least privilege.
+- In transit: TLS everywhere. At rest: disk encryption plus field-level encryption for sensitive data (Rails `encrypts :ssn`).
+- Filter params in logs (`filter_parameters`).
+
+<Myth fact={false}>
+
+Hashing passwords with SHA-256 is secure enough.
+
+<Why>
+
+SHA-256 is designed to be fast, so GPUs try billions of guesses per second. Password hashing needs to be deliberately slow and salted: bcrypt, scrypt, argon2.
+
+</Why>
+
+</Myth>
+
+## Tokens and OAuth in 60 seconds
+
+**Sessions**: a server-side state reference in a cookie, easy to revoke. **JWT**: signed, self-contained claims, so it's stateless but hard to revoke before expiry. Keep them short-lived.
+
+**OAuth 2** is for <mark>delegated authorization</mark> ('let this app read my calendar'). **OpenID Connect** adds identity on top ('log in with Google'). Browser and mobile apps use the authorization code flow with PKCE.
+
+**Webhooks**: verify an HMAC signature with a timing-safe compare (`ActiveSupport::SecurityUtils.secure_compare`).
+
+<Quiz>
+
+OAuth 2.0, by itself, is mainly for…
+
+- [ ] Hashing passwords
+- [x] Delegated authorization: granting an app scoped access without sharing your password
+- [ ] Encrypting databases
+- [ ] Load balancing
+
+<Why>
+
+OAuth answers 'what can this client access?'. For 'who is this user?' you add OpenID Connect, which issues an ID token.
+
+</Why>
+
+</Quiz>
+
+<Interview>
+
+You're reviewing a PR that adds an endpoint to download invoices as PDF. What do you look for?
+
+<Rubric>
+
+- Authorization scoping on the lookup (IDOR) and tests for cross-account access
+- Authentication required; consider token/session type
+- Safe file handling: no user-controlled paths; signed, expiring URLs if served from S3
+- No sensitive data in logs; correct cache headers (private, no-store)
+- Rate limiting / abuse (PDF generation is expensive) and async generation
+- Audit logging for access to financial documents
+
+</Rubric>
+
+<Answer>
+
+**Access first:** is the lookup scoped (`current_account.invoices.find`) or behind a policy? Is there a spec proving another account gets a 404? That test is the one I'd insist on.
+
+**Files:** no paths built from params. If PDFs live in S3, serve short-lived signed URLs, not public buckets.
+
+**Leaks:** `Cache-Control: private, no-store` so shared proxies don't keep copies, and no invoice data in logs or error trackers.
+
+**Abuse and cost:** PDF generation is CPU-heavy, so rate-limit and generate async with caching. **Audit:** log who downloaded which financial document.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- Scope every lookup through the owner. Test cross-account access.
+- Parameterize everything that reaches SQL or a shell.
+- XSS hides in html_safe/raw. CSRF is handled by tokens + SameSite.
+- bcrypt/argon2 for passwords; secrets out of repo and logs.
+- Verify webhook HMACs with secure_compare.
+
+</CheatSheet>

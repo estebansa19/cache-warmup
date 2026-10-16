@@ -1,0 +1,90 @@
+.topbar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 5;
+  background: var(--sheet);
+  border-bottom: 1px solid var(--rule);
+}
+.topbar-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  flex: none;
+}
+.brand-mark {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+}
+.brand-mark i {
+  border-radius: 2px;
+  background: var(--ink);
+}
+.brand-mark i:first-child {
+  background: var(--hl-strong);
+}
+.brand-name {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+.nav {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-left: auto;
+  min-width: 0;
+}
+.nav::-webkit-scrollbar {
+  display: none;
+}
+.nav a {
+  padding: 6px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav a:hover {
+  color: var(--ink);
+  background: var(--cobalt-soft);
+}
+.nav a[aria-current="page"] {
+  color: var(--ink);
+  background: var(--hl);
+  font-weight: 700;
+}
+.badge {
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  background: var(--ink);
+  color: var(--sheet);
+  border-radius: 999px;
+  padding: 0 7px;
+  line-height: 1.6;
+}
+@media (max-width: 520px) {
+  .brand-name {
+    display: none;
+  }
+}

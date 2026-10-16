@@ -1,0 +1,110 @@
+.settings {
+  max-width: 760px;
+  display: grid;
+  gap: 18px;
+}
+.settings-card {
+  padding: 22px;
+  display: grid;
+  gap: 14px;
+}
+.settings-card > p,
+.settings-card li {
+  color: var(--ink-2);
+}
+.settings-card ol {
+  margin: 0;
+  padding-left: 1.3em;
+  display: grid;
+  gap: 8px;
+}
+.settings-card summary {
+  cursor: pointer;
+}
+.settings-card details[open] {
+  display: grid;
+  gap: 12px;
+}
+.ai-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  flex-wrap: wrap;
+}
+.ai-state .dot {
+  width: 10px;
+  height: 10px;
+}
+
+.tool-picker {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.tool-picker legend {
+  font-weight: 700;
+  margin-bottom: 8px;
+  padding: 0;
+}
+.tool-option {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 14px;
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.tool-option:hover:not(.disabled) {
+  border-color: var(--ink);
+}
+.tool-option.checked {
+  border-color: var(--ink);
+  background: var(--cobalt-soft);
+}
+.tool-option.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.tool-option input {
+  margin: 5px 0 0;
+  accent-color: var(--ink);
+}
+.tool-detail {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field label {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.field .help {
+  font-size: var(--step--1);
+  color: var(--ink-3);
+}
+.field input[type="text"] {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.field input[type="text"]:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+textarea.ruled.short {
+  min-height: 96px;
+}

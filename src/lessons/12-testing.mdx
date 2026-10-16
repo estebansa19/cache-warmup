@@ -1,0 +1,162 @@
+---
+id: "testing"
+title: "Testing that earns its keep"
+track: "Craft"
+mins: 20
+tag: "A flaky suite isn't a safety net. It's weather."
+cards:
+  - ["Stub vs mock", "Stub: canned answers. Mock: asserts an interaction happened."]
+  - ["Why instance_double?", "Verifies stubbed methods exist on the real class."]
+  - ["Don't mock what you don't own means…", "Wrap third-party APIs in your adapter and mock the adapter."]
+  - ["Flaky on month-end → fix with…", "travel_to + explicit edge-case tests."]
+  - ["Does 100% coverage mean no bugs?", "No. It shows lines ran, not that behavior was verified."]
+  - ["Characterization test", "Pins current behavior of legacy code before refactoring."]
+---
+
+A suite that takes 40 minutes and fails randomly 5% of the time isn't a safety net. <mark>It's weather.</mark> People stop trusting it, then stop reading it, then merge on red.
+
+## The pyramid (and why people argue about it)
+
+**Unit**: fast and focused, lots of them. **Integration**: real DB and real collaborators, fewer. **End-to-end/system**: a real browser, slow, a handful for critical paths.
+
+The 'testing trophy' crowd argues integration tests give the best confidence per dollar. Both camps agree: <mark>push each test as low as it can go while still proving what matters.</mark>
+
+## Test doubles vocabulary
+
+- **Dummy**: passed around, never used.
+- **Stub**: returns canned answers. RSpec: `allow(x).to receive(:y).and_return(z)`.
+- **Spy**: records calls so you can assert afterward (`have_received`).
+- **Mock**: pre-programmed expectations that fail if not met. `expect(x).to receive(:y)`.
+- **Fake**: a working lightweight implementation, like an in-memory gateway.
+
+```ruby
+gateway = instance_double(PaymentGateway)  # verifies the methods exist
+allow(gateway).to receive(:charge).and_return(Result.ok)
+
+RenewSubscription.new(gateway:).call(sub)
+
+expect(gateway).to have_received(:charge).with(amount: 1999, key: "sub-1-2026-10")
+```
+
+<Quiz>
+
+Difference between a stub and a mock?
+
+- [ ] None
+- [x] A stub provides canned answers (state); a mock asserts that a specific interaction happened (behavior)
+- [ ] Mocks are faster
+- [ ] Stubs only work with classes
+
+<Why>
+
+Stub: 'when asked, say this.' Mock: 'you must be called like this.' Over-mocking couples tests to implementation, so refactors break tests even when behavior is fine.
+
+</Why>
+
+</Quiz>
+
+## What makes a test good
+
+- Tests **behavior**, not private implementation.
+- One reason to fail, and a failure message that explains itself.
+- Arrange / Act / Assert, readable top to bottom.
+- <mark>Don't mock what you don't own.</mark> Wrap the Stripe SDK in your own adapter, mock the adapter in unit tests, and use WebMock/VCR at the adapter's edge.
+
+<Quiz>
+
+Why does `instance_double` beat a plain `double`?
+
+- [ ] It's faster
+- [x] It verifies stubbed methods actually exist on the real class (with the right arity), so tests break when the interface changes
+- [ ] It hits the database
+- [ ] It auto-generates factories
+
+<Why>
+
+Plain doubles happily stub methods that were renamed months ago, and the test stays green while production breaks. Verifying doubles catch that drift.
+
+</Why>
+
+</Quiz>
+
+## Flaky tests: the usual suspects
+
+- **Time**: `Date.today` near midnight or month-end. Fix with `travel_to`.
+- **Order dependence**: leaked global state, class variables, ENV. Run with `--order random` and the seed.
+- **Async UI**: system specs asserting before the JS finishes. Use Capybara's waiting matchers, never `sleep`.
+- **Unseeded randomness**, unique-constraint collisions in factories.
+- **Shared external resources**: real network, shared Redis DBs.
+
+Fix the cause. <mark>Auto-retrying flaky tests just hides the bug.</mark>
+
+<Quiz>
+
+A spec fails only on the last day of the month. Most likely culprit?
+
+- [ ] Database corruption
+- [x] Date math (e.g. 'next month same day') without freezing time
+- [ ] Too many threads
+- [ ] A Ruby bug
+
+<Why>
+
+Jan 31 + 1 month is Feb 28/29. Freeze time with `travel_to` and add explicit edge-case tests for month-end. Billing code has a lot of these.
+
+</Why>
+
+</Quiz>
+
+<Myth fact={false}>
+
+100% code coverage means the code has no bugs.
+
+<Why>
+
+Coverage proves lines ran, not that the assertions were meaningful or that edge cases were tested. It's a useful flashlight for untested areas and a bad target to chase.
+
+</Why>
+
+</Myth>
+
+## Characterization tests for legacy code
+
+Before refactoring code nobody understands, write tests that pin down <mark>what it does today</mark>, even if that's weird. Capture inputs and outputs (a 'golden master'), refactor, and confirm the outputs are identical. Then change behavior deliberately, one test at a time.
+
+<Interview>
+
+Our CI takes 35 minutes and ~5% of runs fail on flaky tests. You own fixing it. What's your plan?
+
+<Rubric>
+
+- Measures first: per-file timings, flake rate per test (CI history)
+- Quarantines known flakes with owners/tickets instead of global retries
+- Fixes root-cause categories (time, order, async, shared state)
+- Speeds up: parallelization (split by timing), cheaper factories (build_stubbed, let_it_be), push tests down the pyramid
+- Infra wins: caching dependencies, DB setup strategy
+- Sets a target/SLO and ownership so it doesn't regress
+
+</Rubric>
+
+<Answer>
+
+**Measure:** collect per-test timing and failure history from CI. Usually ~10% of files take ~50% of the time, and a dozen tests cause most flakes.
+
+**Flakes:** quarantine them (still run, non-blocking) with a ticket and owner each, then fix by category: freeze time, random order with seed reproduction, Capybara waiting matchers, isolated Redis/DB state.
+
+**Speed:** parallelize split by historical timing; replace `create` with `build_stubbed` where persistence isn't needed; `let_it_be` for shared setup; move logic tests out of system specs; cache gems and assets.
+
+**Keep it fixed:** a target (under 10 min, under 1% flake), a dashboard, and a rule that new flakes get fixed or quarantined within a day.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- Push tests as low as they can go while still proving what matters.
+- Stub = state, mock = interaction. Verifying doubles.
+- Don't mock what you don't own.
+- Flakes: time, order, async, shared state. Fix, don't retry.
+- Characterize legacy code before changing it.
+
+</CheatSheet>

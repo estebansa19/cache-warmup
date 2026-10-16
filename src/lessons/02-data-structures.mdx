@@ -1,0 +1,187 @@
+---
+id: "ds"
+title: "Data structures you actually reach for"
+track: "Foundations"
+mins: 25
+tag: "Pick the structure by the operation you need to be fast."
+cards:
+  - ["Structure for 'give me the smallest item' repeatedly?", "Heap / priority queue. O(log n) insert and pop."]
+  - ["How does Sidekiq store scheduled jobs and retries?", "Redis sorted sets scored by run-at timestamp."]
+  - ["Shortest path with unweighted edges?", "BFS."]
+  - ["Order tasks so dependencies come first?", "Topological sort (and it detects cycles)."]
+  - ["Top 10 of 5M items efficiently?", "Size-k heap: O(n log k). Ruby: min_by(10)."]
+  - ["LRU cache in O(1)?", "Hash map + doubly linked list (or Ruby's ordered Hash)."]
+---
+
+Every data-structure interview question is secretly one question: <mark>which operation has to be fast?</mark> Lookup by key? Smallest item? Next in line? Prefix match? Name the operation and the structure usually picks itself.
+
+## The cheat table
+
+Memorize the trade-offs, not the implementations.
+
+| Structure | Fast at | Slow at |
+| --- | --- | --- |
+| Array | Index access, append, iteration | Search, insert in the middle |
+| Hash / Set | Lookup, insert, delete by key | Ordered queries, range scans |
+| Stack | Push/pop at one end (LIFO) | Anything in the middle |
+| Queue | Enqueue at back, dequeue at front (FIFO) | Random access |
+| Heap | Get min/max, insert: O(log n) | Search for arbitrary item |
+| Balanced tree / B-tree | Ordered ops and ranges: O(log n) | Constant-time lookups |
+| Trie | Prefix search | Memory use |
+| Graph | Modeling relationships | Everything costs a traversal |
+
+## Stacks and queues in the wild
+
+**Stacks (LIFO):** the call stack, undo history, matching brackets, depth-first search. **Queues (FIFO):** job queues, breadth-first search, rate-limited outbound requests. A Ruby `Array` can play both roles (`push/pop`, `push/shift`). For threads, use `Thread::Queue`, which is thread-safe and blocks on empty.
+
+<Quiz>
+
+Sidekiq needs to find the next scheduled job whose run time has passed. What structure does it use in Redis?
+
+- [ ] A list (queue)
+- [x] A sorted set scored by timestamp
+- [ ] A plain hash
+- [ ] A stack
+
+<Why>
+
+Scheduled jobs and retries live in Redis sorted sets (ZSETs) scored by run-at time. Fetching 'everything with score ≤ now' is a cheap range query. Same idea as a priority queue.
+
+</Why>
+
+</Quiz>
+
+## Heaps: the 'top k' tool
+
+A heap keeps the smallest (or largest) item on top, with O(log n) insert and pop. It's the structure behind priority queues, schedulers, and <mark>top-k problems</mark>: to find the 10 cheapest carrier quotes among 5 million, keep a size-10 max-heap and you're at O(n log k) instead of sorting everything.
+
+```ruby
+# Ruby has no stdlib heap, but Enumerable covers the common case:
+quotes.min_by(10, &:price)  # top-k without a full sort in your code
+```
+
+## Trees and tries
+
+A **balanced search tree** keeps keys ordered with O(log n) insert and lookup, so range queries come cheap. A **B-tree** is the disk-friendly version with fat nodes and few levels; your database indexes are B-trees (more in lesson 5). A **trie** stores strings character by character, so every word sharing a prefix shares a path. It's the autocomplete structure.
+
+<Note>
+
+A search box over hotel cities is a classic trie use case. A sorted array plus binary search for the prefix range is the low-tech alternative and is often good enough.
+
+</Note>
+
+## Graphs: when things depend on things
+
+Nodes plus edges. Three traversals cover most interview questions:
+
+- **BFS**: shortest path when every edge costs the same (fewest hops).
+- **DFS**: explore deep, detect cycles.
+- **Topological sort**: order tasks so every dependency comes first. Think build steps, migrations, form components that depend on other components.
+
+Weighted shortest path (cheapest shipping route) is <mark>Dijkstra</mark>.
+
+```ruby
+require "tsort" # Ruby even ships topological sort
+```
+
+<Quiz>
+
+Your form engine has components that depend on other components' values. You need a valid evaluation order. What do you reach for?
+
+- [ ] Binary search
+- [x] Topological sort on the dependency graph
+- [ ] A min-heap
+- [ ] A trie
+
+<Why>
+
+Dependencies form a directed graph. A topological sort gives an order where every component comes after its dependencies, and if it fails, you've found a cycle, which is a bug worth reporting.
+
+</Why>
+
+</Quiz>
+
+<Quiz>
+
+Ruby `Hash` iteration order is…
+
+- [ ] Random
+- [ ] Sorted by key
+- [x] Insertion order (guaranteed since Ruby 1.9)
+- [ ] Sorted by hash value
+
+<Why>
+
+Ruby hashes preserve insertion order. Many languages' hash maps (Java's HashMap, for example) do not. Saying 'it depends on the language' in an interview earns points.
+
+</Why>
+
+</Quiz>
+
+<Quiz>
+
+Autocomplete over 50,000 city names, matching by prefix as the user types. Best fit?
+
+- [ ] Hash keyed by full name
+- [x] Trie (or sorted array + binary search on the prefix)
+- [ ] Stack
+- [ ] Queue
+
+<Why>
+
+A hash only finds exact keys. Prefix queries need order or shared paths. A trie or sorted array gives you every match for 'Med…' fast.
+
+</Why>
+
+</Quiz>
+
+<Interview>
+
+Design an LRU cache with O(1) get and put. What data structures do you use and why?
+
+<Rubric>
+
+- Hash map for O(1) key lookup
+- Doubly linked list (or ordered hash) to track recency with O(1) move and evict
+- Explains get: move to most-recent; put: insert/update then evict least-recent when over capacity
+- Mentions Ruby's insertion-ordered Hash trick (delete + reinsert, evict first key)
+- Brings up thread safety or real-world equivalents (Redis allkeys-lru, Rails.cache)
+
+</Rubric>
+
+<Answer>
+
+Two structures working together. A **hash** from key to node gives O(1) lookup. A **doubly linked list** ordered by recency gives O(1) unlink/move and eviction at the tail.
+
+**get:** look up the node, move it to the head, return it. **put:** update or insert at the head; if size exceeds capacity, drop the tail and delete its key from the hash.
+
+In Ruby you can cheat legitimately, because Hash keeps insertion order:
+
+```ruby
+def get(k)
+  return unless @h.key?(k)
+  @h[k] = @h.delete(k)   # move to newest
+end
+
+def put(k, v)
+  @h.delete(k)
+  @h[k] = v
+  @h.delete(@h.first[0]) if @h.size > @cap
+end
+```
+
+Then mention the edges: a mutex for thread safety, and that Redis offers this as an eviction policy so you rarely build it yourself.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- Name the operation that must be fast, then pick the structure.
+- Hash for lookup, heap for min/max, tree for ranges, trie for prefixes.
+- Graph problems are mostly BFS, DFS, or topological sort.
+- Ruby Hash keeps insertion order. Many languages' maps don't.
+- LRU = hash + doubly linked list.
+
+</CheatSheet>

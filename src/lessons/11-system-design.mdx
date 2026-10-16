@@ -1,0 +1,182 @@
+---
+id: "sysdesign"
+title: "System design: the playbook"
+track: "Systems"
+mins: 35
+tag: "They grade the thinking, not the diagram."
+cards:
+  - ["Seconds in a day (for estimates)", "86,400 ≈ 10⁵."]
+  - ["1M requests/day ≈ ? rps", "~12 rps average; peak 2–10×."]
+  - ["First 5 minutes of a design round", "Clarify functional + non-functional requirements."]
+  - ["Trade-off sentence template", "Start with X because Y; if Z grows, move to W at cost V."]
+  - ["Token bucket parameters", "Refill rate + bucket capacity (burst)."]
+  - ["Rate limiter store across many servers", "Redis with atomic ops / Lua script."]
+---
+
+System design rounds don't grade the boxes and arrows. They grade <mark>how you think out loud</mark>: what you ask, what you estimate, what you trade away, and whether you notice your own bottlenecks before they do.
+
+<Order>
+
+Order the steps of a 45-minute design round.
+
+1. Clarify requirements: functional and non-functional (scale, latency, consistency)
+2. Back-of-envelope estimates (traffic, storage)
+3. API sketch
+4. Data model
+5. High-level architecture
+6. Deep dive on the hardest part
+7. Bottlenecks, failure modes, trade-offs
+
+<Why>
+
+Rough budget: ~5 min requirements, ~5 estimates, ~10 API + data, ~10 high level, ~10 deep dive, ~5 wrap-up. Jumping straight to 'we use Kafka' is the most common miss.
+
+</Why>
+
+</Order>
+
+## Back-of-envelope math
+
+Precision doesn't matter. Orders of magnitude do.
+
+- 1 day ≈ 86,400 s ≈ <mark>10⁵ s</mark>
+- 1M requests/day ≈ 12 req/s average. Peak is 2–10× that.
+- 10M rows/day × 1 KB ≈ 10 GB/day ≈ 3.6 TB/year
+- A single Postgres box handles thousands of simple queries per second. Many 'scale' problems don't need sharding.
+
+<Quiz>
+
+50 million API requests per day. Average requests per second?
+
+- [ ] ~58
+- [x] ~580
+- [ ] ~5,800
+- [ ] ~58,000
+
+<Why>
+
+50,000,000 / 86,400 ≈ 579. Then say out loud: 'peak maybe 3–5×, so design for ~2–3k rps.'
+
+</Why>
+
+</Quiz>
+
+## The usual building blocks
+
+- **Load balancer + stateless app servers**: scale horizontally; keep sessions out of memory.
+- **Cache** (Redis): read-heavy hot data.
+- **Primary + read replicas**: read scaling, with replica lag.
+- **Queue + workers**: anything slow, retryable, or bursty.
+- **Object storage + CDN**: files, PDFs, labels, images.
+- **Search index** (Elasticsearch): full-text and faceted queries the DB is bad at.
+- **Partitioning/sharding**: only when one primary can't keep up with writes.
+
+Add each one <mark>because a requirement demands it</mark>, and say which requirement.
+
+## Worked example: a subscription renewal engine
+
+**Ask:** 10M subscriptions; most renew on the 1st at 00:00 UTC; charges must never double; dunning on failure.
+
+**Estimate:** 10M charges in a burst. Gateways rate-limit, so this is a scheduling problem, not a CPU problem.
+
+**Design:**
+
+- A scheduler finds due subscriptions in keyset-paginated batches and enqueues jobs, spreading them over hours with jitter.
+- Workers claim each `(subscription_id, period)` with a unique constraint, then charge with an idempotency key.
+- Failures go to a dunning schedule (retry day 1, 3, 7) as a state machine.
+- `invoice.paid` / `payment_failed` events go out through the outbox to email and analytics.
+
+**Deep dive:** gateway rate limits → per-gateway token bucket; a 2-hour outage → backlog drains with backoff, no double charges thanks to the keys.
+
+<Quiz>
+
+Best first move when the interviewer says 'Design a notification system'?
+
+- [ ] Draw Kafka
+- [x] Ask questions: which channels, volume, latency needs, delivery guarantees, user preferences, priority
+- [ ] Pick MongoDB
+- [ ] Start coding
+
+<Why>
+
+Requirements shape everything. 'Transactional receipts within 10s' and 'weekly marketing digest' are completely different systems.
+
+</Why>
+
+</Quiz>
+
+## Trade-off language
+
+Senior signal is in the sentence shape: <mark>'I'd start with X because Y. If Z grows past N, I'd move to W, at the cost of V.'</mark>
+
+Example: 'I'd start with Postgres because the data is relational and we need transactions for billing. If write volume outgrows one primary, I'd partition by account_id, at the cost of cross-account queries becoming harder.'
+
+<Myth fact={false}>
+
+For anything at scale, NoSQL is the right choice.
+
+<Why>
+
+Pick by access patterns and consistency needs, not hype. Relational databases scale a long way and give you transactions and constraints. Key-value or document stores shine for simple, huge, partition-friendly access patterns.
+
+</Why>
+
+</Myth>
+
+<Quiz>
+
+When is adding a queue the right call?
+
+- [ ] Always, it's more scalable
+- [x] When work is slow, bursty, retryable, or doesn't need to finish before the response
+- [ ] When the DB is slow at reads
+- [ ] To replace the database
+
+<Why>
+
+Queues decouple producer speed from consumer speed and absorb bursts. They add latency, operational overhead, and at-least-once semantics, so name that cost too.
+
+</Why>
+
+</Quiz>
+
+<Interview>
+
+Design a rate limiter for our public API: 1,000 requests per minute per API key, running across 20 app servers.
+
+<Rubric>
+
+- Clarifies requirements (per key, burst tolerance, accuracy, latency budget)
+- Picks an algorithm and explains it (token bucket, sliding window log/counter, fixed window trade-offs)
+- Shared state in Redis with atomic ops (INCR + EXPIRE or a Lua script)
+- Returns 429 with Retry-After / rate-limit headers
+- Failure mode: what if Redis is down (fail open vs closed) and why
+- Considers latency overhead, hot keys, per-plan config, multi-region
+
+</Rubric>
+
+<Answer>
+
+**Clarify:** per API key, smooth or bursty, how exact? A few percent of slop is usually fine.
+
+**Algorithm:** fixed window (`INCR key:minute`) is simple but allows 2× at window edges. A sliding window counter (weighted current + previous window) or a **token bucket** (refill rate + burst capacity) is smoother. Pick the token bucket and explain the two parameters.
+
+**State:** Redis shared by all 20 servers, with a Lua script for atomic read-refill-take. Adds about 1 ms.
+
+**Response:** 429 + Retry-After + `RateLimit-*` headers.
+
+**Failure:** if Redis is unreachable, fail open (allow) with a local in-memory fallback limit, because blocking every customer is worse than a brief overage. Alert on it. Limits come from plan config, and multi-region gets a per-region budget.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- Requirements → estimates → API → data → high level → deep dive → trade-offs.
+- 10⁵ seconds/day. 1M/day ≈ 12 rps.
+- Add each component because a requirement demands it.
+- Say the trade-off out loud.
+- Relational scales further than people think.
+
+</CheatSheet>

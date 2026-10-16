@@ -1,5 +1,7 @@
 node_modules/
+dist/
 .DS_Store
 *.log
 cache-warmup-progress-*.json
+cache-warmup.config.json
 .env

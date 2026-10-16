@@ -1,0 +1,187 @@
+---
+id: "solid"
+title: "OOP & SOLID, minus the posters"
+track: "Foundations"
+mins: 25
+tag: "Five principles, each one a specific kind of pain."
+cards:
+  - ["SRP in one line", "One reason to change, meaning one actor whose requests drive changes."]
+  - ["Open/Closed smell", "A case/if on type repeated across the codebase."]
+  - ["Liskov in one line", "Subtypes must honor the parent's contract: no surprise raises, no stricter inputs."]
+  - ["Dependency Inversion in Ruby", "Inject collaborators (with defaults) instead of hard-coding concrete classes."]
+  - ["Do concerns give you SRP?", "No. They split the file, not the responsibilities."]
+  - ["Composition vs inheritance default?", "Prefer composition; inherit only for a real, stable is-a."]
+---
+
+You've met the 900-line `Subscription` model. It calculates proration, renders invoices, sends emails, and talks to three gateways. <mark>SOLID is just a list of the ways that file hurts.</mark>
+
+## The four pillars, in one breath
+
+- **Encapsulation**: hide state behind behavior. Callers say `invoice.pay!` and never set `status` directly.
+- **Abstraction**: expose what, hide how.
+- **Inheritance**: reuse via an is-a relationship. Powerful and easy to overuse.
+- **Polymorphism**: same message, different behavior. In Ruby it's mostly <mark>duck typing</mark>: if it responds to `#charge`, it's a gateway.
+
+## S: Single Responsibility
+
+Not 'does one thing'. Better: <mark>has one reason to change</mark>, meaning one group of people whose requests change it. If finance changes tax rules and marketing changes email copy, and both edit `Invoice`, it has two responsibilities.
+
+```ruby
+# Before: Invoice#total, #to_pdf, #email_customer
+# After:
+Invoice            # data + domain rules
+InvoiceCalculator  # finance changes this
+InvoicePdf         # design changes this
+InvoiceMailer      # comms changes this
+```
+
+## O: Open/Closed
+
+Open for extension, closed for modification. Adding a carrier shouldn't mean editing a `case` statement in five places.
+
+```ruby
+# Every new carrier edits this method:
+case carrier
+when "fedex" then FedexClient.new.quote(pkg)
+when "dhl"   then DhlClient.new.quote(pkg)
+end
+
+# Extension by registration:
+CARRIERS = { fedex: FedexAdapter, dhl: DhlAdapter }
+CARRIERS.fetch(carrier).new.quote(pkg)
+```
+
+<Quiz>
+
+A method switches on `plan.kind` in six places across the codebase. Each new plan type means touching all six. Which principle hurts most?
+
+- [ ] Liskov Substitution
+- [x] Open/Closed
+- [ ] Interface Segregation
+- [ ] DRY only
+
+<Why>
+
+Adding behavior requires modifying existing code. Polymorphism (a class per plan kind, or a strategy registry) moves the switch into one place, usually a factory.
+
+</Why>
+
+</Quiz>
+
+## L: Liskov Substitution
+
+A subtype must keep the promises of its parent. If code works with a `Plan`, it must work with any subclass of `Plan`, with no surprise exceptions and no stricter inputs.
+
+```ruby
+class FreeTrialPlan < Plan
+  def charge!(amount)
+    raise NotImplementedError  # breaks every caller of Plan#charge!
+  end
+end
+```
+
+<Note>
+
+The textbook version is Square &lt; Rectangle: setting width on a square silently changes its height. The fix is usually 'that's not really an is-a relationship', so model it differently.
+
+</Note>
+
+## I & D: small interfaces, injected dependencies
+
+**Interface Segregation**: don't force clients to depend on methods they don't use. In Ruby, think small role modules (`Refundable`, `Chargeable`) instead of one giant gateway contract.
+
+**Dependency Inversion**: high-level policy shouldn't depend on low-level details. Both depend on an abstraction, so <mark>your billing logic shouldn't know about the Stripe SDK</mark>.
+
+```ruby
+class RenewSubscription
+  def initialize(gateway: PaymentGateway.default)
+    @gateway = gateway   # injected, so tests pass a fake
+  end
+end
+```
+
+<Quiz>
+
+Which snippet is dependency injection?
+
+- [ ] `def call; StripeClient.new.charge(x); end`
+- [x] `def initialize(client: StripeClient.new); @client = client; end`
+- [ ] `STRIPE = StripeClient.new` (a global)
+- [ ] `include StripeClient`
+
+<Why>
+
+The dependency comes in from outside, with a sensible default. Tests and other callers can swap it without monkey-patching.
+
+</Why>
+
+</Quiz>
+
+<Myth fact={false}>
+
+Moving methods into Rails concerns gives you Single Responsibility.
+
+<Why>
+
+Concerns split the file, not the responsibility. The model still has every method and every reason to change. Sometimes that's fine, but extracting a real collaborator object is what actually separates responsibilities.
+
+</Why>
+
+</Myth>
+
+## Composition over inheritance
+
+Inheritance couples you to the parent's internals forever. Composition (an object that *has* a calculator, a notifier, a gateway) lets you swap parts. Default to composition, and use inheritance for true is-a relationships with a stable parent.
+
+<Quiz>
+
+`ExpressShipment < Shipment` overrides `#deliver_by` to raise when the destination is rural. What's the smell?
+
+- [ ] Open/Closed
+- [x] Liskov: callers expecting any Shipment now get exceptions
+- [ ] Single Responsibility
+- [ ] No smell
+
+<Why>
+
+The subclass narrows what the parent accepts. Validate eligibility before choosing the shipment type, or model service levels as composition instead.
+
+</Why>
+
+</Quiz>
+
+<Interview>
+
+Tell me about a time you refactored a class or module that did too much. How did you decide what to extract, and how did you keep it safe?
+
+<Rubric>
+
+- Concrete example with real context (system, size, pain it caused)
+- Explains how responsibilities were identified (reasons to change, actors)
+- Safety net: characterization tests before changing behavior
+- Incremental approach (extract one collaborator at a time, strangler-style), not a big-bang rewrite
+- Names trade-offs and shows a measurable result
+
+</Rubric>
+
+<Answer>
+
+A strong answer is a short story. **Situation:** e.g. a legacy retirement-plan app where one model handled contributions, compliance checks, and statements. **Diagnosis:** three different teams' requests all landed in that file, so it had three reasons to change.
+
+**Approach:** characterization tests around current behavior first. Then extract one collaborator at a time behind the same public interface, each in its own small PR, shipped behind a flag where the risk was real.
+
+**Result:** numbers if you have them (fewer bugs in that area, faster PR reviews, onboarding time). Close with what you'd do differently.
+
+</Answer>
+
+</Interview>
+
+<CheatSheet>
+
+- S: one reason to change. O: extend by adding, not editing.
+- L: subclasses keep the parent's promises.
+- I: small role interfaces. D: inject dependencies.
+- Concerns ≠ separation of responsibilities.
+- Composition by default.
+
+</CheatSheet>

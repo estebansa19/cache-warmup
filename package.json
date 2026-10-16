@@ -1,16 +1,42 @@
 {
   "name": "cache-warmup",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Short, interactive lessons to refresh software engineering fundamentals, with an optional AI mock interviewer.",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node serve.mjs --open",
-    "serve": "node serve.mjs",
-    "providers": "node serve.mjs --list"
+    "start": "vite build && node server/index.mjs --open",
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "node server/index.mjs",
+    "providers": "node server/index.mjs --list",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "check": "prettier --check . && tsc --noEmit && vitest run"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@mdx-js/rollup": "^3.1.1",
+    "@types/mdx": "^2.0.14",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "prettier": "^3.9.10",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-mdx-frontmatter": "^6.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
 }
