@@ -1,0 +1,21 @@
+# Keeps the workflow actions and npm packages current with one grouped PR per ecosystem each month.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+    ignore:
+      # Matches the oldest supported Node in package.json "engines".
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
