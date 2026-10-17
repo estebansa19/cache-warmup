@@ -1,11 +1,16 @@
 import { isCheck, playerSteps, type CheckStep, type Lesson } from "../content/types";
-import type { CheckResult, LegacyKeys, Progress } from "./progress";
+import type { LegacyKeys } from "./normalize";
+import type { CheckResult, Progress } from "./progress";
 
 /** Where a check's answer is saved. */
-export const checkKey = (lesson: Lesson, step: CheckStep) => `${lesson.id}:${step.id}`;
+export function checkKey(lesson: Lesson, step: CheckStep) {
+  return `${lesson.id}:${step.id}`;
+}
 
 /** Where a flashcard's schedule is saved. */
-export const cardKey = (lesson: Lesson, card: Lesson["cards"][number]) => `${lesson.id}:${card.id}`;
+export function cardKey(lesson: Lesson, card: Lesson["cards"][number]) {
+  return `${lesson.id}:${card.id}`;
+}
 
 /** Your answer to a check, if you gave one. An answer saved for a different kind of check doesn't count. */
 export function resultFor(lesson: Lesson, step: CheckStep, progress: Progress): CheckResult | undefined {
@@ -17,11 +22,14 @@ export function resultFor(lesson: Lesson, step: CheckStep, progress: Progress): 
 export function lessonScore(lesson: Lesson, progress: Progress) {
   let total = 0;
   let correct = 0;
+
   for (const step of lesson.steps) {
     if (!isCheck(step)) continue;
+
     total++;
     if (resultFor(lesson, step, progress)?.ok) correct++;
   }
+
   return { total, correct };
 }
 
@@ -42,18 +50,19 @@ export function nextLesson(lessons: Lesson[], progress: Progress): Lesson | null
 export type CardInfo = { lesson: Lesson; front: string; back: string };
 
 /** Every flashcard by its saved key. */
-export const cardsByKey = (lessons: Lesson[]) =>
-  new Map<string, CardInfo>(
+export function cardsByKey(lessons: Lesson[]) {
+  return new Map<string, CardInfo>(
     lessons.flatMap((lesson) =>
       lesson.cards.map(
         (card) => [cardKey(lesson, card), { lesson, front: card.front, back: card.back }] as const,
       ),
     ),
   );
+}
 
 /** How version 1 progress keys ("lessonId:position") map to today's keys. */
-export const legacyKeys = (lessons: Lesson[]): LegacyKeys =>
-  new Map(
+export function legacyKeys(lessons: Lesson[]): LegacyKeys {
+  return new Map(
     lessons.map((lesson) => [
       lesson.id,
       {
@@ -64,3 +73,4 @@ export const legacyKeys = (lessons: Lesson[]): LegacyKeys =>
       },
     ]),
   );
+}

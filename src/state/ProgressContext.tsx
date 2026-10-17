@@ -8,15 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import { legacy } from "../content/lessons";
-import {
-  STORAGE_KEY,
-  loadProgress,
-  parseStored,
-  reducer,
-  saveProgress,
-  type Action,
-  type Progress,
-} from "./progress";
+import { reducer, type Action, type Progress } from "./progress";
+import { STORAGE_KEY, loadProgress, parseStored, saveProgress } from "./storage";
 
 type Value = { progress: Progress; dispatch: Dispatch<Action> };
 
@@ -30,6 +23,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   // Save shortly after changes settle, so typing an answer doesn't write on every keystroke.
   useEffect(() => {
     if (progress === fromOtherTab.current) return;
+
     const timer = setTimeout(() => saveProgress(progress), 300);
     return () => clearTimeout(timer);
   }, [progress]);
@@ -39,6 +33,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     const flush = () => {
       if (progress !== fromOtherTab.current) saveProgress(progress);
     };
+
     window.addEventListener("pagehide", flush);
     return () => window.removeEventListener("pagehide", flush);
   }, [progress]);
@@ -47,10 +42,12 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key !== STORAGE_KEY && e.key !== null) return; // null: the other tab cleared storage
+
       const next = parseStored(e.key === null ? null : e.newValue, legacy);
       fromOtherTab.current = next;
       dispatch({ type: "replace", progress: next });
     };
+
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);

@@ -1,8 +1,8 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from "react";
-import { STORAGE_KEY } from "../state/progress";
-import { today } from "../utils/dates";
+import { clearSavedProgress, exportFileName, readSavedProgress } from "../state/storage";
 import { downloadFile } from "../utils/download";
 import { focusFirst } from "../utils/focus";
+import { ConfirmButton } from "./ConfirmButton";
 
 /**
  * Shows <CrashScreen> instead of a blank page when anything below it throws.
@@ -27,42 +27,26 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
  * what crashed.
  */
 function CrashScreen({ error }: { error: Error }) {
-  const [confirmReset, setConfirmReset] = useState(false);
   const [message, setMessage] = useState("");
   const page = useRef<HTMLElement>(null);
-  const previous = useRef<boolean | null>(null);
 
-  // Announce the crash by taking focus to its heading; after that, keep focus on the safe
-  // choice when the reset buttons swap ("Keep it", or "Reset progress…" again).
+  // Announce the crash by taking focus to its heading.
   useEffect(() => {
-    if (previous.current === null) {
-      document.title = "Something broke · Cache Warmup";
-      focusFirst(page.current, "h1");
-    } else if (previous.current !== confirmReset) {
-      focusFirst(page.current, confirmReset ? ".keep-progress" : ".reset-progress");
-    }
-    previous.current = confirmReset;
-  }, [confirmReset]);
+    document.title = "Something broke · Cache Warmup";
+    focusFirst(page.current, "h1");
+  }, []);
 
   function exportProgress() {
-    let saved: string | null = null;
-    try {
-      saved = localStorage.getItem(STORAGE_KEY);
-    } catch {
-      /* storage blocked */
-    }
+    const saved = readSavedProgress();
     if (!saved) return setMessage("There's no saved progress in this browser.");
-    const name = `cache-warmup-progress-${today()}.json`;
+
+    const name = exportFileName();
     downloadFile(name, saved);
     setMessage(`Exported. Look for ${name} in your downloads.`);
   }
 
   function reset() {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* storage blocked */
-    }
+    clearSavedProgress();
     window.location.hash = "#/";
     window.location.reload();
   }
@@ -83,20 +67,7 @@ function CrashScreen({ error }: { error: Error }) {
           <button className="btn ghost" onClick={exportProgress}>
             Export progress
           </button>
-          {confirmReset ? (
-            <>
-              <button className="btn danger" onClick={reset}>
-                Yes, erase my progress
-              </button>
-              <button className="btn ghost keep-progress" onClick={() => setConfirmReset(false)}>
-                Keep it
-              </button>
-            </>
-          ) : (
-            <button className="btn ghost reset-progress" onClick={() => setConfirmReset(true)}>
-              Reset progress…
-            </button>
-          )}
+          <ConfirmButton label="Reset progress…" confirmLabel="Yes, erase my progress" onConfirm={reset} />
         </div>
         <p role="status" className="live">
           {message}

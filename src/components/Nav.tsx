@@ -1,4 +1,4 @@
-import { cardByKey } from "../content/lessons";
+import { isKnownCard } from "../content/lessons";
 import { hrefFor, type Route } from "../router";
 import { useProgress } from "../state/ProgressContext";
 import { dueCardKeys } from "../state/srs";
@@ -15,7 +15,7 @@ const LINKS = [
 
 export function Nav({ route }: { route: Route }) {
   const { progress } = useProgress();
-  const due = dueCardKeys(progress.cards, today(), (key) => cardByKey.has(key)).length;
+  const due = dueCardKeys(progress.cards, today(), isKnownCard).length;
   const current = route.view === "lesson" ? "home" : route.view;
 
   return (

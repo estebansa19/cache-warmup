@@ -20,10 +20,11 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
   const { progress, dispatch } = useProgress();
   const steps = playerSteps(lesson);
   const last = steps.length - 1;
-  const pos = Math.min(last, Math.max(0, progress.pos[lesson.id] ?? 0));
+  const pos = clamp(progress.pos[lesson.id] ?? 0, last);
   const step = steps[pos];
   const result = isCheck(step) ? resultFor(lesson, step, progress) : undefined;
   const blocked = isCheck(step) && !result;
+  const hint = stepHint(step, blocked);
   const sheet = useRef<HTMLElement>(null);
   const shownPos = useRef(pos);
 
@@ -35,38 +36,36 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
   // A new step: take focus to its heading, so keyboard and screen reader users start reading there.
   useEffect(() => {
     if (shownPos.current === pos) return;
+
     shownPos.current = pos;
     focusFirst(sheet.current, "h2");
   }, [pos]);
 
-  const go = (to: number) => {
-    dispatch({ type: "move", lessonId: lesson.id, pos: Math.min(last, Math.max(0, to)) });
-    window.scrollTo(0, 0);
-  };
-
   // ← and → move between steps, but not while typing or with a modifier (Alt+← is "back" in browsers).
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+
     const target = e.target instanceof HTMLElement ? e.target : null;
     if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+
     if (e.key === "ArrowRight" && !blocked && pos < last) go(pos + 1);
     if (e.key === "ArrowLeft" && pos > 0) go(pos - 1);
   });
+
   useEffect(() => {
     const listener = (e: KeyboardEvent) => onKey(e);
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
   }, []);
 
-  const answer = (r: CheckResult) => {
+  function go(to: number) {
+    dispatch({ type: "move", lessonId: lesson.id, pos: clamp(to, last) });
+    window.scrollTo(0, 0);
+  }
+
+  function answer(r: CheckResult) {
     if (isCheck(step)) dispatch({ type: "answer", key: checkKey(lesson, step), result: r, today: today() });
-  };
-  const draft = progress.iv[lesson.id]?.draft;
-  const hint = blocked
-    ? "Answer to continue"
-    : step.kind === "interview"
-      ? "Writing an answer is optional, but it's the best part"
-      : "";
+  }
 
   return (
     <div className="player">
@@ -78,20 +77,7 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
         <span className="mono-note">
           Lesson {lesson.n} · step {pos + 1} of {steps.length}
         </span>
-        <div className="segments" aria-hidden="true">
-          {steps.map((s, i) => (
-            <i
-              key={i}
-              className={segmentClass(
-                s,
-                i,
-                pos,
-                isCheck(s) ? resultFor(lesson, s, progress) : undefined,
-                progress.done[lesson.id],
-              )}
-            />
-          ))}
-        </div>
+        <StepSegments lesson={lesson} steps={steps} pos={pos} />
       </div>
 
       {/* key: each step starts with fresh component state */}
@@ -117,13 +103,7 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
             disabled={blocked}
             aria-describedby={hint ? "player-hint" : undefined}
           >
-            {step.kind === "hook"
-              ? "Let's go"
-              : step.kind === "interview"
-                ? draft
-                  ? "Wrap up"
-                  : "Skip for now"
-                : "Next"}
+            {nextLabel(step, Boolean(progress.iv[lesson.id]?.draft))}
           </button>
         )}
       </div>
@@ -164,14 +144,41 @@ function renderStep(step: PlayerStep, { lesson, result, answer }: StepContext) {
   }
 }
 
-function segmentClass(
-  step: PlayerStep,
-  i: number,
-  pos: number,
-  result: CheckResult | undefined,
-  done: unknown,
-) {
-  if (i === pos) return "current";
-  if (isCheck(step) && result) return result.ok ? "ok" : "miss";
-  return i < pos || done ? "seen" : "";
+/** The progress bar at the top: one segment per step, colored by what you did there. */
+function StepSegments({ lesson, steps, pos }: { lesson: Lesson; steps: PlayerStep[]; pos: number }) {
+  const { progress } = useProgress();
+  const done = Boolean(progress.done[lesson.id]);
+
+  function segmentClass(step: PlayerStep, i: number) {
+    if (i === pos) return "current";
+
+    const result = isCheck(step) ? resultFor(lesson, step, progress) : undefined;
+    if (result) return result.ok ? "ok" : "miss";
+    return i < pos || done ? "seen" : "";
+  }
+
+  return (
+    <div className="segments" aria-hidden="true">
+      {steps.map((s, i) => (
+        <i key={i} className={segmentClass(s, i)} />
+      ))}
+    </div>
+  );
+}
+
+function nextLabel(step: PlayerStep, hasDraft: boolean) {
+  if (step.kind === "hook") return "Let's go";
+  if (step.kind === "interview") return hasDraft ? "Wrap up" : "Skip for now";
+  return "Next";
+}
+
+function stepHint(step: PlayerStep, blocked: boolean) {
+  if (blocked) return "Answer to continue";
+  if (step.kind === "interview") return "Writing an answer is optional, but it's the best part";
+  return "";
+}
+
+/** Keeps a step position between the first step and `last`. */
+function clamp(pos: number, last: number) {
+  return Math.min(last, Math.max(0, pos));
 }

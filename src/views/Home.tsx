@@ -1,18 +1,18 @@
-import { cardByKey, lessons } from "../content/lessons";
+import { isKnownCard, lessons } from "../content/lessons";
 import { TRACKS, playerSteps, type Lesson } from "../content/types";
 import { hrefFor } from "../router";
 import { levelInfo, streak } from "../state/levels";
 import { useProgress } from "../state/ProgressContext";
 import { lessonScore, lessonStatus, nextLesson } from "../state/selectors";
-import { TIERS, dueCardKeys, tierCounts } from "../state/srs";
+import { TIERS, dueCardKeys, nextDueDay, tierCounts } from "../state/srs";
 import type { Progress } from "../state/progress";
-import { prettyDay, today } from "../utils/dates";
+import { prettyDay, today, type Day } from "../utils/dates";
+import { plural, twoDigits } from "../utils/text";
 import "./Home.css";
-
-const pad = (n: number) => String(n).padStart(2, "0");
 
 export function Home() {
   const { progress } = useProgress();
+
   return (
     <>
       <section className="hero">
@@ -56,9 +56,7 @@ export function Home() {
 function Stats({ progress }: { progress: Progress }) {
   const level = levelInfo(progress.xp);
   const reviews = progress.hits + progress.misses;
-  const counts = tierCounts(progress.cards);
-  const max = Math.max(1, ...counts);
-  const total = counts.reduce((a, b) => a + b, 0);
+  const hitRate = reviews ? `${Math.round((progress.hits / reviews) * 100)}%` : "–";
 
   return (
     <div className="panel stats">
@@ -80,76 +78,72 @@ function Stats({ progress }: { progress: Progress }) {
       <div className="kpis">
         <Kpi value={`${Object.keys(progress.done).length}/${lessons.length}`} label="lessons" />
         <Kpi value={String(streak(progress.days, today()))} label="day streak" />
-        <Kpi
-          value={reviews ? `${Math.round((progress.hits / reviews) * 100)}%` : "–"}
-          label="recall hit rate"
-        />
+        <Kpi value={hitRate} label="recall hit rate" />
       </div>
-      <div className="hierarchy">
-        <div className="hierarchy-head">
-          <span className="eyebrow">Memory hierarchy</span>
-          <span className="hierarchy-note">{total} cards</span>
-        </div>
-        {TIERS.map((tier, i) => ({ tier, n: counts[i], i }))
-          .reverse()
-          .map(({ tier, n, i }) => (
-            <div className={`tier-row tier-${i}`} key={tier.name}>
-              <span>{tier.name}</span>
-              <span className="tier-track">
-                <i style={{ width: `${(n / max) * 100}%` }} />
-              </span>
-              <span className="tier-count">{n}</span>
-            </div>
-          ))}
-        <p className="hierarchy-note">
-          Cards move toward L1 each time you remember them, and drop back to disk when you don't.
-        </p>
-      </div>
+      <MemoryHierarchy progress={progress} />
     </div>
   );
 }
 
-const Kpi = ({ value, label }: { value: string; label: string }) => (
-  <div className="kpi">
-    <b>{value}</b>
-    <span>{label}</span>
-  </div>
-);
+function Kpi({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="kpi">
+      <b>{value}</b>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/** How many cards sit in each tier, hottest (L1) on top. */
+function MemoryHierarchy({ progress }: { progress: Progress }) {
+  const counts = tierCounts(progress.cards);
+  const max = Math.max(1, ...counts);
+  const total = counts.reduce((a, b) => a + b, 0);
+  const rows = TIERS.map((tier, i) => ({ tier, count: counts[i], i })).reverse();
+
+  return (
+    <div className="hierarchy">
+      <div className="hierarchy-head">
+        <span className="eyebrow">Memory hierarchy</span>
+        <span className="hierarchy-note">{total} cards</span>
+      </div>
+      {rows.map(({ tier, count, i }) => (
+        <div className={`tier-row tier-${i}`} key={tier.name}>
+          <span>{tier.name}</span>
+          <span className="tier-track">
+            <i style={{ width: `${(count / max) * 100}%` }} />
+          </span>
+          <span className="tier-count">{count}</span>
+        </div>
+      ))}
+      <p className="hierarchy-note">
+        Cards move toward L1 each time you remember them, and drop back to disk when you don't.
+      </p>
+    </div>
+  );
+}
 
 function ContinueCard({ progress }: { progress: Progress }) {
   const lesson = nextLesson(lessons, progress);
-  if (!lesson) {
-    return (
-      <div className="panel today-card">
-        <p className="eyebrow">All {lessons.length} lessons done</p>
-        <h2>The whole syllabus is in cache.</h2>
-        <p>Keep it warm with reviews, and do a few gym reps before any interview.</p>
-        <div className="row actions">
-          <a className="btn" href={hrefFor({ view: "gym" })}>
-            Go to the interview gym
-          </a>
-        </div>
-      </div>
-    );
-  }
-  const status = lessonStatus(lesson, progress);
+  if (!lesson) return <AllDoneCard />;
+
+  const inProgress = lessonStatus(lesson, progress) === "in-progress";
   const anyDone = Object.keys(progress.done).length > 0;
   const step = (progress.pos[lesson.id] ?? 0) + 1;
 
   return (
     <div className="panel today-card continue">
       <span className="big-number" aria-hidden="true">
-        {pad(lesson.n)}
+        {twoDigits(lesson.n)}
       </span>
       <p className="eyebrow">
-        {status === "in-progress" ? "Pick up where you left off" : anyDone ? "Up next" : "Start here"} ·{" "}
-        {lesson.track}
+        {continueEyebrow(inProgress, anyDone)} · {lesson.track}
       </p>
       <h2>{lesson.title}</h2>
       <p>{lesson.tag}</p>
       <div className="row actions">
         <a className="btn" href={hrefFor({ view: "lesson", id: lesson.id })}>
-          {status === "in-progress"
+          {inProgress
             ? `Continue · step ${step} of ${playerSteps(lesson).length}`
             : `Start lesson ${lesson.n}`}
         </a>
@@ -159,27 +153,32 @@ function ContinueCard({ progress }: { progress: Progress }) {
   );
 }
 
+function AllDoneCard() {
+  return (
+    <div className="panel today-card">
+      <p className="eyebrow">All {lessons.length} lessons done</p>
+      <h2>The whole syllabus is in cache.</h2>
+      <p>Keep it warm with reviews, and do a few gym reps before any interview.</p>
+      <div className="row actions">
+        <a className="btn" href={hrefFor({ view: "gym" })}>
+          Go to the interview gym
+        </a>
+      </div>
+    </div>
+  );
+}
+
 function ReviewCard({ progress }: { progress: Progress }) {
   const now = today();
-  const due = dueCardKeys(progress.cards, now, (k) => cardByKey.has(k)).length;
+  const due = dueCardKeys(progress.cards, now, isKnownCard).length;
   const total = Object.keys(progress.cards).length;
-  const nextDue = Object.values(progress.cards)
-    .map((c) => c.due)
-    .sort()[0];
+  const { title, text } = reviewCopy(due, total, nextDueDay(progress.cards), now);
 
   return (
     <div className="panel today-card">
       <p className="eyebrow">Review</p>
-      <h2>
-        {due ? `${due} card${due === 1 ? "" : "s"} going cold` : total ? "Cache is warm" : "No cards yet"}
-      </h2>
-      <p>
-        {due
-          ? "A few minutes of recall now keeps them from dropping back to disk."
-          : total
-            ? `Next review ${prettyDay(nextDue, now)}.`
-            : "Finish a lesson and its flashcards land here, spaced out over days."}
-      </p>
+      <h2>{title}</h2>
+      <p>{text}</p>
       {total > 0 && (
         <div className="row actions">
           <a className={due ? "btn" : "btn ghost"} href={hrefFor({ view: "review" })}>
@@ -192,26 +191,59 @@ function ReviewCard({ progress }: { progress: Progress }) {
 }
 
 function LessonRow({ lesson, progress }: { lesson: Lesson; progress: Progress }) {
-  const status = lessonStatus(lesson, progress);
-  const score = lessonScore(lesson, progress);
   return (
     <a className="lesson-row" href={hrefFor({ view: "lesson", id: lesson.id })}>
-      <span className="lesson-number">{pad(lesson.n)}</span>
+      <span className="lesson-number">{twoDigits(lesson.n)}</span>
       <div>
         <h3>{lesson.title}</h3>
         <p>{lesson.tag}</p>
       </div>
-      {status === "done" ? (
+      <LessonPill lesson={lesson} progress={progress} />
+    </a>
+  );
+}
+
+/** "done · 4/5", the current step, or the time it takes. */
+function LessonPill({ lesson, progress }: { lesson: Lesson; progress: Progress }) {
+  switch (lessonStatus(lesson, progress)) {
+    case "done": {
+      const score = lessonScore(lesson, progress);
+
+      return (
         <span className="pill done">
           done · {score.correct}/{score.total}
         </span>
-      ) : status === "in-progress" ? (
+      );
+    }
+    case "in-progress":
+      return (
         <span className="pill progress">
           {(progress.pos[lesson.id] ?? 0) + 1}/{playerSteps(lesson).length}
         </span>
-      ) : (
-        <span className="pill">{lesson.mins} min</span>
-      )}
-    </a>
-  );
+      );
+    case "new":
+      return <span className="pill">{lesson.mins} min</span>;
+  }
+}
+
+function continueEyebrow(inProgress: boolean, anyDone: boolean) {
+  if (inProgress) return "Pick up where you left off";
+  return anyDone ? "Up next" : "Start here";
+}
+
+/** The review card's heading and line: cards going cold, when the next ones come, or none yet. */
+function reviewCopy(due: number, total: number, nextDue: Day | undefined, now: Day) {
+  if (due) {
+    return {
+      title: `${plural(due, "card")} going cold`,
+      text: "A few minutes of recall now keeps them from dropping back to disk.",
+    };
+  }
+
+  if (total) return { title: "Cache is warm", text: `Next review ${prettyDay(nextDue, now)}.` };
+
+  return {
+    title: "No cards yet",
+    text: "Finish a lesson and its flashcards land here, spaced out over days.",
+  };
 }

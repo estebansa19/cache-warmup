@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { XP, levelInfo, streak } from "../src/state/levels";
-import { emptyProgress, normalize, reducer, type Action, type LegacyKeys } from "../src/state/progress";
+import { normalize, type LegacyKeys } from "../src/state/normalize";
+import { emptyProgress, reducer, type Action } from "../src/state/progress";
 import { dueCardKeys, newCard, reviewCard } from "../src/state/srs";
 
 const DAY = "2026-10-15";
@@ -9,20 +10,24 @@ describe("spaced repetition", () => {
   test("new cards are due tomorrow", () => {
     expect(newCard(DAY)).toEqual({ box: 0, due: "2026-10-16" });
   });
+
   test("remembering moves a card up a tier and spaces it out", () => {
     expect(reviewCard({ box: 0, due: DAY }, true, DAY)).toEqual({ box: 1, due: "2026-10-18" });
     expect(reviewCard({ box: 2, due: DAY }, true, DAY)).toEqual({ box: 3, due: "2026-10-31" });
     expect(reviewCard({ box: 3, due: DAY }, true, DAY).box).toBe(3);
   });
+
   test("forgetting sends it back to disk", () => {
     expect(reviewCard({ box: 3, due: DAY }, false, DAY)).toEqual({ box: 0, due: "2026-10-16" });
   });
+
   test("due cards come oldest first", () => {
     const cards = {
       a: { box: 1, due: "2026-10-14" },
       b: { box: 0, due: "2026-10-10" },
       c: { box: 0, due: "2026-10-20" },
     };
+
     expect(dueCardKeys(cards, DAY)).toEqual(["b", "a"]);
   });
 });
@@ -33,6 +38,7 @@ describe("levels and streaks", () => {
     expect(levelInfo(150).name).toBe("Junior");
     expect(levelInfo(5000)).toMatchObject({ name: "Distinguished", next: null, percent: 100 });
   });
+
   test("a streak counts back from today, or from yesterday if today is empty", () => {
     expect(streak(["2026-10-13", "2026-10-14", DAY], DAY)).toBe(3);
     expect(streak(["2026-10-13", "2026-10-14"], DAY)).toBe(2);
@@ -50,6 +56,7 @@ describe("progress reducer", () => {
       result: { kind: "quiz", ok: true, pick: 1 },
       today: DAY,
     } as const;
+
     const p = reducer(reducer(start, answer), answer);
     expect(p.xp).toBe(XP.check);
     expect(p.days).toEqual([DAY]);
@@ -63,6 +70,7 @@ describe("progress reducer", () => {
       result: { kind: "quiz", ok: true, pick: 0 },
       today: DAY,
     });
+
     expect(p.checks["bigo:q1"]).toEqual({ kind: "quiz", ok: true, pick: 0 });
   });
 
@@ -75,6 +83,7 @@ describe("progress reducer", () => {
       cardKeys: ["bigo:ca", "bigo:cb"],
       today: DAY,
     };
+
     const p = reducer(reducer(start, finish), finish);
     expect(Object.keys(p.cards)).toEqual(["bigo:ca", "bigo:cb"]);
     expect(p.xp).toBe(XP.lesson);
@@ -82,14 +91,18 @@ describe("progress reducer", () => {
 
   test("opening a lesson remembers it, and restarts a finished one left on its last step", () => {
     const done = { ...start, done: { bigo: { at: DAY, correct: 1, total: 1 } } };
+
     expect(reducer(start, { type: "open", lessonId: "bigo", lastStep: 9 })).toMatchObject({
       last: "bigo",
       pos: {},
     });
+
     const atEnd = { ...done, pos: { bigo: 9 } };
     expect(reducer(atEnd, { type: "open", lessonId: "bigo", lastStep: 9 }).pos.bigo).toBe(0);
+
     const midway = { ...done, pos: { bigo: 4 } };
     expect(reducer(midway, { type: "open", lessonId: "bigo", lastStep: 9 }).pos.bigo).toBe(4);
+
     const unfinished = { ...start, pos: { bigo: 9 } };
     expect(reducer(unfinished, { type: "open", lessonId: "bigo", lastStep: 9 }).pos.bigo).toBe(9);
   });
@@ -102,6 +115,7 @@ describe("progress reducer", () => {
   test("revealing the strong answer earns interview XP only after a real attempt", () => {
     const short = reducer(start, { type: "draft", key: "bigo", text: "too short" });
     expect(reducer(short, { type: "revealAnswer", key: "bigo", today: DAY }).xp).toBe(0);
+
     const long = reducer(start, { type: "draft", key: "bigo", text: "word ".repeat(45) });
     expect(reducer(long, { type: "revealAnswer", key: "bigo", today: DAY }).xp).toBe(XP.interview);
   });
@@ -142,12 +156,14 @@ describe("reading saved and imported progress", () => {
         "bigo:7": { box: 0, due: DAY },
       },
     };
+
     const p = normalize(v1, legacy)!;
     expect(p).toMatchObject({ v: 2, xp: 120, profile: "" });
     expect(p.checks).toEqual({
       "bigo:qabc": { kind: "quiz", ok: true, pick: 1 },
       "bigo:mdef": { kind: "myth", ok: false, pick: true },
     });
+
     expect(p.cards).toEqual({ "bigo:c1": { box: 2, due: DAY }, "bigo:c2": { box: 0, due: DAY } });
     // Normalizing the result again changes nothing.
     expect(normalize(JSON.parse(JSON.stringify(p)), legacy)).toEqual(p);
@@ -169,6 +185,7 @@ describe("reading saved and imported progress", () => {
       },
       legacy,
     )!;
+
     expect(p.xp).toBe(0);
     expect(p.days).toEqual([DAY]);
     expect(p.cards).toEqual({ "bigo:c2": { box: 3, due: DAY } }); // an impossible tier is clamped

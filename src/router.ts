@@ -18,8 +18,13 @@ export type Route =
   | { view: "notes" }
   | { view: "settings" };
 
+/** Views whose route is just their name, like #/review. */
+const SIMPLE_VIEWS = ["review", "gym", "notes", "settings"] as const;
+type SimpleView = (typeof SIMPLE_VIEWS)[number];
+
 export function parseRoute(hash: string): Route {
   const [view, id] = hash.replace(/^#\/?/, "").split("/");
+
   if (view === "lesson" && id) {
     try {
       return { view: "lesson", id: decodeURIComponent(id) };
@@ -27,16 +32,24 @@ export function parseRoute(hash: string): Route {
       return { view: "home" }; // a malformed link, like #/lesson/%E0
     }
   }
-  if (view === "review" || view === "gym" || view === "notes" || view === "settings") return { view };
-  return { view: "home" };
+
+  return isSimpleView(view) ? { view } : { view: "home" };
 }
 
-export const hrefFor = (route: Route): string =>
-  route.view === "lesson"
-    ? `#/lesson/${encodeURIComponent(route.id)}`
-    : route.view === "home"
-      ? "#/"
-      : `#/${route.view}`;
+function isSimpleView(view: string): view is SimpleView {
+  return (SIMPLE_VIEWS as readonly string[]).includes(view);
+}
+
+export function hrefFor(route: Route): string {
+  switch (route.view) {
+    case "lesson":
+      return `#/lesson/${encodeURIComponent(route.id)}`;
+    case "home":
+      return "#/";
+    default:
+      return `#/${route.view}`;
+  }
+}
 
 export function navigate(route: Route) {
   window.location.hash = hrefFor(route);
@@ -44,13 +57,16 @@ export function navigate(route: Route) {
 
 export function useRoute(): Route {
   const [route, setRoute] = useState(() => parseRoute(window.location.hash));
+
   useEffect(() => {
     const onChange = () => {
       setRoute(parseRoute(window.location.hash));
       window.scrollTo(0, 0);
     };
+
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
+
   return route;
 }

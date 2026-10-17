@@ -9,11 +9,7 @@ export const lessons: Lesson[] = Object.entries(modules)
   .map(([file, mod]) => parseLesson(file, mod))
   .sort((a, b) => a.n - b.n);
 
-const ids = new Set<string>();
-for (const lesson of lessons) {
-  if (ids.has(lesson.id)) throw new Error(`Two lessons use the id "${lesson.id}". Ids must be unique.`);
-  ids.add(lesson.id);
-}
+assertUniqueIds(lessons);
 
 export const lessonById = new Map(lessons.map((l) => [l.id, l]));
 
@@ -24,3 +20,17 @@ export const cardByKey = cardsByKey(lessons);
 export const legacy = legacyKeys(lessons);
 
 export { extraQuestions } from "./extra-questions";
+
+/** Whether a saved card still exists (its lesson or card may have been removed since). */
+export function isKnownCard(key: string) {
+  return cardByKey.has(key);
+}
+
+function assertUniqueIds(list: Lesson[]) {
+  const ids = new Set<string>();
+
+  for (const lesson of list) {
+    if (ids.has(lesson.id)) throw new Error(`Two lessons use the id "${lesson.id}". Ids must be unique.`);
+    ids.add(lesson.id);
+  }
+}

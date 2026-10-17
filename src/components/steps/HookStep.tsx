@@ -1,15 +1,17 @@
 import type { Lesson } from "../../content/types";
+import { twoDigits } from "../../utils/text";
 
 export function HookStep({ lesson }: { lesson: Lesson }) {
   const reads = lesson.steps.filter((s) => s.kind === "read").length;
   const checks = lesson.steps.length - reads;
+
   return (
     <>
       <span className="eyebrow">
         {lesson.track} · ~{lesson.mins} min
       </span>
       <div className="hook-number" aria-hidden="true">
-        {String(lesson.n).padStart(2, "0")}
+        {twoDigits(lesson.n)}
       </div>
       <h2 className="hook-title">{lesson.title}</h2>
       <div className="hook-text">{lesson.hook}</div>

@@ -24,6 +24,19 @@ export const Rubric = (_: Children) => null;
 export const Answer = (_: Children) => null;
 export const CheatSheet = (_: Children) => null;
 
+export const mdxComponents = {
+  Quiz,
+  Myth,
+  Order,
+  Why,
+  Interview,
+  Rubric,
+  Answer,
+  CheatSheet,
+  Note,
+  table: Table,
+};
+
 /** A "From the field" aside: a real-world tip or analogy. */
 export function Note({ children }: Children) {
   return (
@@ -42,16 +55,3 @@ function Table(props: ComponentPropsWithoutRef<"table">) {
     </div>
   );
 }
-
-export const mdxComponents = {
-  Quiz,
-  Myth,
-  Order,
-  Why,
-  Interview,
-  Rubric,
-  Answer,
-  CheatSheet,
-  Note,
-  table: Table,
-};

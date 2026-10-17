@@ -4,6 +4,7 @@ import { prettyDay } from "../utils/dates";
 
 export function FeedbackCard({ feedback, day }: { feedback: Feedback; day?: string }) {
   const score = Math.max(1, Math.min(5, feedback.score));
+
   return (
     <div className="feedback">
       <div className="feedback-head">
@@ -18,22 +19,8 @@ export function FeedbackCard({ feedback, day }: { feedback: Feedback; day?: stri
       </div>
       {feedback.verdict && <p className="feedback-verdict">{feedback.verdict}</p>}
       <div className="feedback-columns">
-        <div>
-          <h4>What landed</h4>
-          <ul>
-            {feedback.strengths.length ? feedback.strengths.map((s, i) => <li key={i}>{s}</li>) : <li>–</li>}
-          </ul>
-        </div>
-        <div>
-          <h4>What was missing</h4>
-          <ul>
-            {feedback.gaps.length ? (
-              feedback.gaps.map((g, i) => <li key={i}>{g}</li>)
-            ) : (
-              <li>Nothing major.</li>
-            )}
-          </ul>
-        </div>
+        <FeedbackList title="What landed" items={feedback.strengths} empty="–" />
+        <FeedbackList title="What was missing" items={feedback.gaps} empty="Nothing major." />
       </div>
       <div className="feedback-extra">
         {feedback.tip && (
@@ -47,6 +34,17 @@ export function FeedbackCard({ feedback, day }: { feedback: Feedback; day?: stri
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+type FeedbackListProps = { title: string; items: string[]; empty: string };
+
+function FeedbackList({ title, items, empty }: FeedbackListProps) {
+  return (
+    <div>
+      <h4>{title}</h4>
+      <ul>{items.length ? items.map((item, i) => <li key={i}>{item}</li>) : <li>{empty}</li>}</ul>
     </div>
   );
 }

@@ -9,9 +9,10 @@ export function RecapStep({ lesson }: { lesson: Lesson }) {
   const { progress, dispatch } = useProgress();
   const score = lessonScore(lesson, progress);
   const done = progress.done[lesson.id];
+  const finishedOn = done ? prettyDay(done.at) : "";
   const interviewDone = Boolean(progress.iv[lesson.id]?.xp);
 
-  const finish = () =>
+  function finish() {
     dispatch({
       type: "finish",
       lessonId: lesson.id,
@@ -20,6 +21,7 @@ export function RecapStep({ lesson }: { lesson: Lesson }) {
       cardKeys: lesson.cards.map((card) => cardKey(lesson, card)),
       today: today(),
     });
+  }
 
   return (
     <>
@@ -48,8 +50,8 @@ export function RecapStep({ lesson }: { lesson: Lesson }) {
       {done ? (
         <>
           <div className="done-banner">
-            Finished {prettyDay(done.at) === "today" ? "today" : `on ${prettyDay(done.at)}`}. Its cards are in
-            your review deck.
+            Finished {finishedOn === "today" ? "today" : `on ${finishedOn}`}. Its cards are in your review
+            deck.
           </div>
           <div className="row">
             <a className="btn" href={hrefFor({ view: "home" })}>

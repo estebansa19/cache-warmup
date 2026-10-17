@@ -9,9 +9,11 @@ type Props = { ok: boolean; why: ReactNode; lead?: ReactNode; focus?: boolean };
  */
 export function Verdict({ ok, why, lead, focus }: Props) {
   const box = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (focus) box.current?.focus();
   }, [focus]);
+
   return (
     <div className={`verdict ${ok ? "ok" : "no"}`} ref={box} tabIndex={-1}>
       <strong>{ok ? `Correct · +${XP.check} XP` : "Not quite"}</strong>
@@ -21,17 +23,12 @@ export function Verdict({ ok, why, lead, focus }: Props) {
   );
 }
 
+type MarkProps = { correct: boolean; chosen: boolean; visible?: boolean };
+
 /** A ✓ or ✗ on an answered option (unless the option shows one already), with words for screen readers. */
-export function Mark({
-  correct,
-  chosen,
-  visible = true,
-}: {
-  correct: boolean;
-  chosen: boolean;
-  visible?: boolean;
-}) {
+export function Mark({ correct, chosen, visible = true }: MarkProps) {
   if (!correct && !chosen) return null;
+
   return (
     <>
       {visible && (
@@ -39,13 +36,19 @@ export function Mark({
           {correct ? "✓ " : "✗ "}
         </span>
       )}
-      <span className="sr-only">
-        {correct && chosen
-          ? " (your answer, correct)"
-          : correct
-            ? " (correct answer)"
-            : " (your answer, wrong)"}
-      </span>
+      <span className="sr-only">{markLabel(correct, chosen)}</span>
     </>
   );
+}
+
+/** The CSS state of an answer option: "right", "wrong", "dim", or "" before answering. */
+export function optionState(answered: boolean, correct: boolean, chosen: boolean) {
+  if (!answered) return "";
+  if (correct) return "right";
+  return chosen ? "wrong" : "dim";
+}
+
+function markLabel(correct: boolean, chosen: boolean) {
+  if (correct && chosen) return " (your answer, correct)";
+  return correct ? " (correct answer)" : " (your answer, wrong)";
 }

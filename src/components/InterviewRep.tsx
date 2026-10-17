@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAI } from "../ai/AIContext";
-import { AIError } from "../ai/client";
+import { AIError, type FeedbackRequest } from "../ai/client";
 import { hrefFor } from "../router";
 import { useProgress } from "../state/ProgressContext";
 import { today } from "../utils/dates";
-import { words } from "../utils/shuffle";
+import { words } from "../utils/text";
 import { FeedbackCard } from "./FeedbackCard";
 import "./InterviewRep.css";
 
 export type InterviewQuestion = { question: string; rubric?: string[] | null; answer?: ReactNode };
+
+/** Below this, there's too little for the interviewer to react to. */
+const MIN_WORDS_FOR_FEEDBACK = 25;
 
 const ERRORS: Record<string, string> = {
   unreachable:
@@ -24,63 +27,40 @@ const ERRORS: Record<string, string> = {
 export function InterviewRep({ id, question }: { id: string; question: InterviewQuestion }) {
   const { progress, dispatch } = useProgress();
   const ai = useAI();
-  const state = progress.iv[id] ?? {};
-  const draft = state.draft ?? "";
+  const feedback = useFeedbackRequest(id);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-  const abort = useRef<AbortController | null>(null);
   const stopButton = useRef<HTMLButtonElement>(null);
   const askButton = useRef<HTMLButtonElement>(null);
   const result = useRef<HTMLDivElement>(null);
   const wasBusy = useRef(false);
+  const { busy } = feedback;
+  const state = progress.iv[id] ?? {};
+  const draft = state.draft ?? "";
   const hasStrongAnswer = Boolean(question.answer || question.rubric?.length);
+  const checking = ai.phase === "checking";
   const aiOn = Boolean(ai.status?.enabled);
-
-  // Leaving the question (or the page) stops the request, so the AI tool stops too.
-  useEffect(() => () => abort.current?.abort(), []);
+  const aiOff = !checking && !aiOn;
+  const canAsk = aiOn && !busy;
 
   // The feedback button is replaced while waiting: focus Stop, then whatever came back.
   useEffect(() => {
-    if (busy) stopButton.current?.focus();
-    else if (wasBusy.current) {
-      const target =
-        result.current?.querySelector<HTMLElement>(".error-text:not(:empty), .feedback") ?? askButton.current;
-      if (target && target !== askButton.current) target.tabIndex = -1;
-      target?.focus();
-    }
+    const finished = wasBusy.current && !busy;
     wasBusy.current = busy;
+    if (busy) stopButton.current?.focus();
+    if (!finished) return;
+
+    const reply = result.current?.querySelector<HTMLElement>(".error-text:not(:empty), .feedback");
+    if (reply) reply.tabIndex = -1;
+    (reply ?? askButton.current)?.focus();
   }, [busy]);
 
-  async function askForFeedback() {
-    if (words(draft) < 25) {
-      setError("Write a bit more first. A few sentences gives the interviewer something to react to.");
-      return;
-    }
-    setError(null);
-    setDone(false);
-    setBusy(true);
-    abort.current = new AbortController();
-    try {
-      const feedback = await ai.ask(
-        {
-          question: question.question,
-          rubric: question.rubric ?? null,
-          answer: draft,
-          profile: progress.profile,
-        },
-        abort.current.signal,
-      );
-      dispatch({ type: "feedback", key: id, feedback, today: today() });
-      setDone(true);
-    } catch (e) {
-      const err = e instanceof AIError ? e : new AIError("unreachable");
-      if (err.code !== "cancelled")
-        setError(ERRORS[err.code] ?? `The AI tool reported a problem: ${err.message}`);
-    } finally {
-      setBusy(false);
-    }
+  function askForFeedback() {
+    feedback.ask({
+      question: question.question,
+      rubric: question.rubric ?? null,
+      answer: draft,
+      profile: progress.profile,
+    });
   }
 
   function toggleAnswer() {
@@ -103,12 +83,12 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
       />
 
       <div className="row">
-        {aiOn && !busy && (
+        {canAsk && (
           <button className="btn" ref={askButton} onClick={askForFeedback}>
             {state.fb ? "Get fresh feedback" : "Get interviewer feedback"}
           </button>
         )}
-        {ai.phase === "checking" && (
+        {checking && (
           <button className="btn" disabled>
             Looking for AI feedback…
           </button>
@@ -121,13 +101,13 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
         <span className="word-count">{words(draft)} words</span>
       </div>
 
-      {ai.phase !== "checking" && !aiOn && (
+      {aiOff && (
         <p className="muted">
           AI feedback is off, so compare with the strong answer for now.{" "}
           <a href={hrefFor({ view: "settings" })}>Turn on AI feedback</a> (about a minute).
         </p>
       )}
-      {aiOn && !busy && ai.status?.active && (
+      {canAsk && ai.status?.active && (
         <p className="muted">
           Feedback comes from {ai.status.active.label}, using {ai.status.active.usage}.
         </p>
@@ -137,53 +117,112 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
         <div className="thinking">
           <span className="pulse" />
           <span aria-hidden="true">The interviewer is reading your answer…</span>
-          <button className="btn ghost small" ref={stopButton} onClick={() => abort.current?.abort()}>
+          <button className="btn ghost small" ref={stopButton} onClick={feedback.stop}>
             Stop
           </button>
         </div>
       )}
       <p role="status" className="live sr-only">
-        {busy ? "The interviewer is reading your answer." : done ? "Feedback is ready." : ""}
+        {announcement(feedback)}
       </p>
       <div ref={result}>
         <p role="alert" className="error-text live">
-          {error}
+          {feedback.error}
         </p>
         {!busy && state.fb && <FeedbackCard feedback={state.fb} day={state.fbAt} />}
       </div>
 
-      {!hasStrongAnswer && !aiOn && ai.phase !== "checking" && (
-        <div className="strong-answer">
-          <h3>Self-check</h3>
-          <ul className="rubric">
-            <li>Did you open with a direct answer, then add detail?</li>
-            <li>Did you give one concrete example from your own work?</li>
-            <li>Did you name at least one trade-off or failure mode?</li>
-            <li>Could a non-expert follow it in under two minutes?</li>
-          </ul>
-        </div>
-      )}
-
-      {showAnswer && (
-        <div className="strong-answer">
-          {question.rubric?.length ? (
-            <>
-              <h3>What a strong answer covers</h3>
-              <ul className="rubric">
-                {question.rubric.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {question.answer ? (
-            <>
-              <h3>One way to say it</h3>
-              <div className="prose compact">{question.answer}</div>
-            </>
-          ) : null}
-        </div>
-      )}
+      {!hasStrongAnswer && aiOff && <SelfCheck />}
+      {showAnswer && <StrongAnswer question={question} />}
     </div>
   );
+}
+
+/** The rubric and a model answer, when the question has them. */
+function StrongAnswer({ question }: { question: InterviewQuestion }) {
+  return (
+    <div className="strong-answer">
+      {question.rubric?.length ? (
+        <>
+          <h3>What a strong answer covers</h3>
+          <ul className="rubric">
+            {question.rubric.map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {question.answer ? (
+        <>
+          <h3>One way to say it</h3>
+          <div className="prose compact">{question.answer}</div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Generic questions to grade yourself with, when there's no strong answer and no AI. */
+function SelfCheck() {
+  return (
+    <div className="strong-answer">
+      <h3>Self-check</h3>
+      <ul className="rubric">
+        <li>Did you open with a direct answer, then add detail?</li>
+        <li>Did you give one concrete example from your own work?</li>
+        <li>Did you name at least one trade-off or failure mode?</li>
+        <li>Could a non-expert follow it in under two minutes?</li>
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Sends an answer to the AI interviewer and saves the feedback. Leaving the question (or the
+ * page) stops the request, so the AI tool stops too.
+ */
+function useFeedbackRequest(id: string) {
+  const { dispatch } = useProgress();
+  const ai = useAI();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const abort = useRef<AbortController | null>(null);
+
+  useEffect(() => () => abort.current?.abort(), []);
+
+  async function ask(request: FeedbackRequest) {
+    if (words(request.answer) < MIN_WORDS_FOR_FEEDBACK) {
+      setError("Write a bit more first. A few sentences gives the interviewer something to react to.");
+      return;
+    }
+
+    setError(null);
+    setDone(false);
+    setBusy(true);
+    abort.current = new AbortController();
+
+    try {
+      const feedback = await ai.ask(request, abort.current.signal);
+      dispatch({ type: "feedback", key: id, feedback, today: today() });
+      setDone(true);
+    } catch (e) {
+      const err = e instanceof AIError ? e : new AIError("unreachable");
+      if (err.code !== "cancelled") setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return { busy, error, done, ask, stop: () => abort.current?.abort() };
+}
+
+/** What the screen reader hears about the request. */
+function announcement({ busy, done }: { busy: boolean; done: boolean }) {
+  if (busy) return "The interviewer is reading your answer.";
+  return done ? "Feedback is ready." : "";
+}
+
+function errorText(error: AIError): string {
+  return ERRORS[error.code] ?? `The AI tool reported a problem: ${error.message}`;
 }

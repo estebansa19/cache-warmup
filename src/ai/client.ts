@@ -57,36 +57,48 @@ async function call<T>(
 ): Promise<T> {
   const signals = [init.signal, timeoutMs ? AbortSignal.timeout(timeoutMs) : null].filter((s) => s != null);
   let res: Response;
+
   try {
     res = await fetch(base + path, { ...init, signal: AbortSignal.any(signals), cache: "no-store" });
   } catch {
     if (init.signal?.aborted) throw new AIError("cancelled");
     throw new AIError("unreachable");
   }
+
   const data: unknown = await res.json().catch(() => null);
+
   if (!res.ok) {
     const error = z.safeParse(errorSchema, data);
+
     throw error.success
       ? new AIError(error.data.error.code, error.data.error.message)
       : new AIError("unreachable");
   }
+
   const parsed = z.safeParse(schema, data);
-  if (!parsed.success)
+
+  if (!parsed.success) {
     throw new AIError("bad_response", "The AI server sent a reply this app doesn't understand.");
+  }
+
   return parsed.data;
 }
 
-const json = (method: string, body: unknown): RequestInit => ({
-  method,
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(body),
-});
+function json(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
 
-export const getStatus = (base: string, signal?: AbortSignal) =>
-  call(base, "/api/ai/status", statusSchema, { signal }, 4000);
+export function getStatus(base: string, signal?: AbortSignal) {
+  return call(base, "/api/ai/status", statusSchema, { signal }, 4000);
+}
 
-export const savePreference = (base: string, preference: Preference) =>
-  call(base, "/api/ai/config", statusSchema, json("PUT", preference));
+export function savePreference(base: string, preference: Preference) {
+  return call(base, "/api/ai/config", statusSchema, json("PUT", preference));
+}
 
 export async function requestFeedback(
   base: string,
@@ -97,6 +109,7 @@ export async function requestFeedback(
     ...json("POST", request),
     signal,
   });
+
   const feedback = toFeedback(parseLooseJson(text));
   if (!feedback) throw new AIError("invalid_json");
   return feedback;
@@ -107,17 +120,21 @@ export function parseLooseJson(text: string): unknown {
   const t = String(text ?? "")
     .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
     .trim();
+
   const attempts = [t, /```(?:json)?\s*([\s\S]*?)```/.exec(t)?.[1]];
   const first = t.indexOf("{");
   const last = t.lastIndexOf("}");
   if (first >= 0 && last > first) attempts.push(t.slice(first, last + 1));
+
   for (const candidate of attempts) {
     if (!candidate) continue;
+
     try {
       return JSON.parse(candidate);
     } catch {
       /* try the next shape */
     }
   }
+
   return null;
 }

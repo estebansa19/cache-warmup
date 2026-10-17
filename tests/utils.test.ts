@@ -10,10 +10,12 @@ describe("parseRoute", () => {
     expect(parseRoute("#/settings")).toEqual({ view: "settings" });
     expect(parseRoute("#/lesson/big-o")).toEqual({ view: "lesson", id: "big-o" });
   });
+
   test("round-trips through hrefFor", () => {
     const route = { view: "lesson", id: "a b/c" } as const;
     expect(parseRoute(hrefFor(route))).toEqual(route);
   });
+
   test("malformed or unknown hashes go home instead of throwing", () => {
     expect(parseRoute("#/lesson/%E0%A4%A")).toEqual({ view: "home" });
     expect(parseRoute("#/lesson/")).toEqual({ view: "home" });
@@ -26,6 +28,7 @@ describe("shuffling", () => {
     expect(shuffledIndexes(6, "seed")).toEqual(shuffledIndexes(6, "seed"));
     expect([...shuffledIndexes(6, "seed")].sort()).toEqual([0, 1, 2, 3, 4, 5]);
   });
+
   test("scrambledIndexes never returns the original order for 2 or more items", () => {
     for (let n = 2; n <= 8; n++) {
       for (let seed = 0; seed < 300; seed++) {

@@ -45,26 +45,49 @@ export function createStaticHandler(dist) {
       res.writeHead(status, { ...SECURITY_HEADERS, "Content-Type": "text/plain; charset=utf-8" });
       res.end(text);
     };
+
     if (!isLoopbackHost(req.headers.host)) return reply(403, "Forbidden");
     if (req.method !== "GET" && req.method !== "HEAD") return reply(405);
-    let rel;
+
+    const rel = decodePath(req.url);
+    if (rel === null) return reply(400);
+
+    const file = fileInFolder(dist, rel);
+    if (!file) return reply(404, "Not found");
+
     try {
-      rel = decodeURIComponent(new URL(req.url ?? "/", "http://localhost").pathname);
-    } catch {
-      return reply(400);
-    }
-    // No dotfiles or dot-folders, and no "..".
-    if (rel.split(/[\\/]/).some((part) => part.startsWith("."))) return reply(404, "Not found");
-    if (rel.endsWith("/")) rel += "index.html";
-    const file = path.normalize(path.join(dist, rel));
-    const type = TYPES[path.extname(file).toLowerCase()];
-    if (!file.startsWith(dist + path.sep) || !type) return reply(404, "Not found");
-    try {
-      const body = await readFile(file);
-      res.writeHead(200, { ...SECURITY_HEADERS, "Content-Type": type, "Cache-Control": "no-cache" });
+      const body = await readFile(file.path);
+      res.writeHead(200, { ...SECURITY_HEADERS, "Content-Type": file.type, "Cache-Control": "no-cache" });
       res.end(req.method === "HEAD" ? undefined : body);
     } catch {
       reply(404, "Not found");
     }
   };
+}
+
+/**
+ * The URL's path, decoded. Null for a malformed one, like /%E0.
+ * @param {string | undefined} url
+ */
+function decodePath(url) {
+  try {
+    return decodeURIComponent(new URL(url ?? "/", "http://localhost").pathname);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The file `rel` points to inside `dist`, with its content type. Null when it may not be
+ * served: a dotfile or dot-folder, anything outside `dist`, or a type not in TYPES.
+ * @param {string} dist
+ * @param {string} rel
+ * @returns {{path: string, type: string} | null}
+ */
+function fileInFolder(dist, rel) {
+  if (rel.split(/[\\/]/).some((part) => part.startsWith("."))) return null;
+
+  const file = path.normalize(path.join(dist, rel.endsWith("/") ? rel + "index.html" : rel));
+  const type = TYPES[path.extname(file).toLowerCase()];
+  return file.startsWith(dist + path.sep) && type ? { path: file, type } : null;
 }
