@@ -54,11 +54,13 @@ Tell me about it.
 
 </CheatSheet>`;
 
-const lesson = ({
+function lesson({
   frontmatter = FRONTMATTER,
   body = `## A heading\n\nSome text.\n\n${QUIZ}`,
   end = END,
-} = {}) => [frontmatter, "An intro.", body, end].join("\n\n");
+} = {}) {
+  return [frontmatter, "An intro.", body, end].join("\n\n");
+}
 
 async function compile(source: string): Promise<LessonModule> {
   return (await evaluate(source, {
@@ -67,8 +69,9 @@ async function compile(source: string): Promise<LessonModule> {
   })) as unknown as LessonModule;
 }
 
-const parse = async (source: string, file = "src/lessons/15-sample.mdx") =>
-  parseLesson(file, await compile(source));
+async function parse(source: string, file = "src/lessons/15-sample.mdx") {
+  return parseLesson(file, await compile(source));
+}
 
 describe("parseLesson", () => {
   test("a complete lesson parses into steps", async () => {
@@ -96,6 +99,7 @@ describe("parseLesson", () => {
     expect(a.steps.map((s) => (s.kind === "read" ? null : s.id))).toEqual(
       b.steps.map((s) => (s.kind === "read" ? null : s.id)),
     );
+
     expect(a.cards[0].id).toBe(b.cards[0].id);
   });
 

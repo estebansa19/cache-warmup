@@ -9,6 +9,8 @@ import {
   type Preference,
 } from "./client";
 
+const PREFS_KEY = "cache-warmup:prefs";
+
 type Phase = "checking" | "ready" | "unreachable";
 
 type Value = {
@@ -24,17 +26,6 @@ type Value = {
 };
 
 const AIContext = createContext<Value | null>(null);
-const PREFS_KEY = "cache-warmup:prefs";
-
-function readServerUrl(): string {
-  try {
-    return String(JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}").bridgeUrl ?? "");
-  } catch {
-    return "";
-  }
-}
-
-const toBase = (url: string) => url.trim().replace(/\/+$/, "");
 
 export function AIProvider({ children }: { children: ReactNode }) {
   const [serverUrl, setUrl] = useState(readServerUrl);
@@ -47,13 +38,16 @@ export function AIProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const request = ++latest.current;
     setPhase("checking");
+
     try {
       const next = await getStatus(base);
       if (request !== latest.current) return;
+
       setStatus(next);
       setPhase("ready");
     } catch {
       if (request !== latest.current) return;
+
       setStatus(null);
       setPhase("unreachable");
     }
@@ -68,11 +62,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
     status,
     serverUrl,
     setServerUrl(url) {
-      try {
-        localStorage.setItem(PREFS_KEY, JSON.stringify({ bridgeUrl: url }));
-      } catch {
-        /* ignore */
-      }
+      saveServerUrl(url);
       // A new address refreshes through the effect above; the same one needs asking directly.
       if (toBase(url) === base) refresh();
       setUrl(url);
@@ -94,4 +84,25 @@ export function useAI(): Value {
   const value = useContext(AIContext);
   if (!value) throw new Error("useAI must be used inside <AIProvider>");
   return value;
+}
+
+function readServerUrl(): string {
+  try {
+    return String(JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}").bridgeUrl ?? "");
+  } catch {
+    return "";
+  }
+}
+
+function saveServerUrl(url: string) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ bridgeUrl: url }));
+  } catch {
+    /* storage blocked: the address lasts for this visit only */
+  }
+}
+
+/** The address without trailing slashes, so paths can be appended. */
+function toBase(url: string) {
+  return url.trim().replace(/\/+$/, "");
 }

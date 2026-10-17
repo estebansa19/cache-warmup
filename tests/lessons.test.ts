@@ -19,6 +19,7 @@ describe("lessons", () => {
       expect(lesson.interview.question.length).toBeGreaterThan(20);
       expect(lesson.interview.rubric.length).toBeGreaterThanOrEqual(3);
       expect(lesson.cards.length).toBeGreaterThanOrEqual(4);
+
       for (const step of lesson.steps) {
         if (step.kind === "quiz") {
           // Every option has text, no two read the same, so the marked answer is a real choice.
@@ -27,6 +28,7 @@ describe("lessons", () => {
           expect(options.every(Boolean)).toBe(true);
           expect(new Set(options).size).toBe(options.length);
         }
+
         if (step.kind === "order") expect(step.itemText.every(Boolean)).toBe(true);
         if (step.kind === "read") expect(step.title).not.toBe("");
       }
@@ -39,6 +41,7 @@ describe("lessons", () => {
       expect(legacy.get(lesson.id)?.steps.filter(Boolean).length).toBe(checks);
       expect(legacy.get(lesson.id)?.cards.length).toBe(lesson.cards.length);
     }
+
     expect(cardByKey.size).toBe(lessons.reduce((n, l) => n + l.cards.length, 0));
   });
 
@@ -51,11 +54,13 @@ describe("lessons", () => {
 
 describe("parseLesson errors are readable", () => {
   const body = () => null;
+
   test("bad frontmatter names the file and the field", () => {
     expect(() =>
       parseLesson("src/lessons/15-new.mdx", { default: body, frontmatter: { id: "new" } }),
     ).toThrow(/15-new\.mdx: check the frontmatter: title/);
   });
+
   test("file names need a lesson number", () => {
     expect(() => parseLesson("src/lessons/new.mdx", { default: body, frontmatter: {} })).toThrow(LessonError);
   });

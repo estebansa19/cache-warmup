@@ -18,9 +18,12 @@ src/
   lessons/            one .mdx file per lesson (most contributions happen here)
   content/            turns MDX into lessons: parse-lesson.ts, the frontmatter schema, the
                       build-time lesson check (check-lesson.ts), the components lessons can use, types
-  views/              one component per screen: Home, LessonPlayer, Review, Gym, CheatSheets, Settings
+  views/              one component per screen: Home, LessonPlayer, Review, Gym, CheatSheets, and
+                      settings/ (one file per section)
   components/         pieces shared between screens; steps/ has one component per step type
-  state/              progress (a reducer saved to localStorage), spaced repetition, levels
+  state/              progress (progress.ts: its shape and the reducer; normalize.ts: reading saved
+                      or imported data; storage.ts: localStorage), spaced repetition, levels
+  utils/              small helpers with no app knowledge: dates, text, shuffling, focus, downloads
   ai/                 talks to the AI server and reads the feedback it sends back
   styles/             design tokens and shared styles; each view keeps its own CSS next to it
 server/               plain JavaScript with no dependencies, type-checked through JSDoc comments
@@ -28,13 +31,26 @@ server/               plain JavaScript with no dependencies, type-checked throug
   static.mjs          serves dist/ (security headers, no hidden files)
   bridge.mjs          the AI endpoints (also mounted by `npm run dev`)
   prompt.mjs          the interviewer prompt, built from the question, rubric, answer, and "About you"
-  providers.mjs       Claude Code, Codex, Gemini, OpenCode, Ollama, APIs
+  providers.mjs       the list of AI tools: Claude Code, Codex, Gemini, OpenCode, Ollama, APIs
+  run-cli.mjs         runs a CLI tool safely (no shell, empty folder, stopped on timeout or cancel)
+  apis.mjs            the tools reached over HTTP: Ollama, the Anthropic and OpenAI-compatible APIs
+  errors.mjs          CodedError, which bridge.mjs turns into an HTTP status
   options.mjs         flags and environment variables, shared by `npm start` and `npm run dev`
   config.mjs          reads and writes cache-warmup.config.json
 tests/                Vitest: lessons, the lesson parser, progress logic, AI parsing, the servers
 ```
 
 There's no state library and no router library. Progress is one object behind `useProgress()`, and routes are hash links like `#/lesson/indexes`.
+
+## Code style
+
+Prettier handles formatting (`npm run format`). Beyond that:
+
+- **Constants first, then functions.** A file opens with its imports, constants and types, then its functions. Functions are `function` declarations, not `const f = () =>`. (The marker components in `mdx-components.tsx` are the one exception: they're a list of tags.)
+- **One job per function.** When a function needs a comment to explain its second half, that half is its own function. Components work the same way: a block of markup with its own logic is its own component.
+- **Tables over long `if` chains.** When the same kind of check repeats (validation rules, routes, error codes), put the cases in a list or map and loop over it, like `OVERRIDE_PROBLEMS` in `server/options.mjs` or `routes` in `server/bridge.mjs`.
+- **Early returns over nested ternaries.** Text that depends on several cases comes from a small function that returns early.
+- **Blank lines between steps.** Keep a declaration next to the guard that checks it, and put a blank line before the work that follows, around multi-line blocks (`if`, `for`, `try`), and before a multi-line `return`. In CSS, leave a blank line between rules.
 
 ## Writing a lesson
 
@@ -176,4 +192,4 @@ Extra Interview gym questions live in `src/content/extra-questions.ts`.
 
 Add an entry to `PROVIDERS` in `server/providers.mjs` with `id`, `label`, `usage`, `hint`, `models`, `available()` and `run(prompt, model, signal)`. Set `needsModel: true` if it can't run without a model name; "auto" then skips it. It shows up in Settings automatically.
 
-For a CLI, use `runCli`: it passes arguments directly (never through a shell), sends the prompt on stdin, runs in an empty temporary folder, and stops the tool when `signal` aborts. Turn off every tool the CLI documents a way to turn off, check the result with the CLI's own help or debug commands, and say in the README what's left when a tool can't be fully turned off. Pass the model as one `--model=value` argument. If an environment variable would quietly switch the CLI from the user's plan to API credits, remove it with `dropEnv`. The server has no dependencies, and we'd like to keep it that way.
+For a CLI, use `runCli` from `server/run-cli.mjs`: it passes arguments directly (never through a shell), sends the prompt on stdin, runs in an empty temporary folder, and stops the tool when `signal` aborts. Turn off every tool the CLI documents a way to turn off, check the result with the CLI's own help or debug commands, and say in the README what's left when a tool can't be fully turned off. Pass the model as one `--model=value` argument. If an environment variable would quietly switch the CLI from the user's plan to API credits, remove it with `dropEnv`. The server has no dependencies, and we'd like to keep it that way.

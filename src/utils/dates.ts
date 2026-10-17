@@ -1,10 +1,15 @@
+import { twoDigits } from "./text";
+
 /** Dates are local calendar days as "YYYY-MM-DD", which compare correctly as strings. */
 export type Day = string;
 
-export const toDay = (d: Date): Day =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export function toDay(d: Date): Day {
+  return `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}-${twoDigits(d.getDate())}`;
+}
 
-export const today = (): Day => toDay(new Date());
+export function today(): Day {
+  return toDay(new Date());
+}
 
 export function addDays(day: Day, n: number): Day {
   const [y, m, d] = day.split("-").map(Number);
@@ -16,6 +21,7 @@ export function prettyDay(day: Day | null | undefined, now: Day = today()): stri
   if (!day) return "";
   if (day === now) return "today";
   if (day === addDays(now, 1)) return "tomorrow";
+
   const [y, m, d] = day.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

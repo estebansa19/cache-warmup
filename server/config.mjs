@@ -19,6 +19,7 @@ export const DEFAULT_PREFERENCE = { provider: "auto", model: "" };
 export function readPreference() {
   try {
     const data = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
+
     return {
       provider: typeof data.provider === "string" ? data.provider : "auto",
       model: typeof data.model === "string" ? data.model : "",

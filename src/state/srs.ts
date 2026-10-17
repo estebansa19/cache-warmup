@@ -15,15 +15,25 @@ export const TIERS = [
 
 export type Card = { box: number; due: Day };
 
-export const newCard = (now: Day): Card => ({ box: 0, due: addDays(now, TIERS[0].days) });
+/** Keeps a tier number inside the hierarchy. */
+export function clampTier(box: number) {
+  return Math.max(0, Math.min(TIERS.length - 1, box));
+}
+
+export function newCard(now: Day): Card {
+  return { box: 0, due: addDays(now, TIERS[0].days) };
+}
 
 export function reviewCard(card: Card, remembered: boolean, now: Day): Card {
   if (!remembered) return { box: 0, due: addDays(now, TIERS[0].days) };
+
   const box = Math.min(TIERS.length - 1, card.box + 1);
   return { box, due: addDays(now, TIERS[box].days) };
 }
 
-export const isDue = (card: Card, now: Day) => card.due <= now;
+export function isDue(card: Card, now: Day) {
+  return card.due <= now;
+}
 
 /** Keys of due cards, oldest first, then lowest tier first. */
 export function dueCardKeys(
@@ -39,6 +49,13 @@ export function dueCardKeys(
 
 export function tierCounts(cards: Record<string, Card>): number[] {
   const counts = TIERS.map(() => 0);
-  for (const card of Object.values(cards)) counts[Math.max(0, Math.min(TIERS.length - 1, card.box))]++;
+  for (const card of Object.values(cards)) counts[clampTier(card.box)]++;
   return counts;
+}
+
+/** The soonest day any card comes due, or undefined with no cards. */
+export function nextDueDay(cards: Record<string, Card>): Day | undefined {
+  return Object.values(cards)
+    .map((c) => c.due)
+    .sort()[0];
 }

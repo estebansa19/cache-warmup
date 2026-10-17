@@ -1,6 +1,7 @@
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   renameSync,
@@ -22,6 +23,16 @@ const bin = path.join(dir, "bin");
 const fakeClaude = path.join(bin, "claude");
 const configFile = path.join(dir, "config.json");
 const pidFile = path.join(dir, "fake.pid");
+
+// What the tests send.
+const json = { "Content-Type": "application/json" };
+
+const ask = {
+  question: "QUESTION-MARKER: explain caching",
+  rubric: ["a point"],
+  answer: "My answer",
+  profile: "",
+};
 
 // The fake CLI. FAKE_MODE picks what it does; it always reads the prompt from stdin.
 const FAKE = `#!/usr/bin/env node
@@ -60,7 +71,7 @@ delete process.env.OPENAI_API_KEY;
 
 const { createBridge } = await import("../server/bridge.mjs");
 const { bridgeOptions } = await import("../server/options.mjs");
-const { ollamaBase } = await import("../server/providers.mjs");
+const { ollamaBase } = await import("../server/apis.mjs");
 
 let server: http.Server;
 let locked: http.Server;
@@ -74,11 +85,11 @@ async function listen(handler: http.RequestListener) {
 }
 
 beforeAll(async () => {
-  const { mkdirSync } = await import("node:fs");
   mkdirSync(bin);
   writeFileSync(fakeClaude, FAKE);
   chmodSync(fakeClaude, 0o755);
   symlinkSync(process.execPath, path.join(bin, "node")); // for the fake's #!/usr/bin/env node
+
   // A port with nothing on it, so Ollama is never found.
   const closed = await listen(() => {});
   process.env.OLLAMA_HOST = `127.0.0.1:${closed.port}`;
@@ -86,13 +97,16 @@ beforeAll(async () => {
 
   const bridge = await createBridge({ log: false, extraOrigins: ["https://me.github.io"] });
   ({ s: server, port } = await listen((req, res) => void bridge.handle(req, res)));
+
   const fixed = await createBridge({ log: false, override: { provider: "claude", model: "" } });
   ({ s: locked, port: lockedPort } = await listen((req, res) => void fixed.handle(req, res)));
 });
+
 afterAll(() => {
   server.close();
   locked.close();
 });
+
 afterEach(() => {
   delete process.env.FAKE_MODE;
   delete process.env.ANTHROPIC_API_KEY;
@@ -132,36 +146,38 @@ function call(
         );
       },
     );
+
     req.on("error", reject);
+
     if (body !== undefined) req.end(typeof body === "string" ? body : JSON.stringify(body));
     else req.end();
   });
 }
-const json = { "Content-Type": "application/json" };
-const ask = {
-  question: "QUESTION-MARKER: explain caching",
-  rubric: ["a point"],
-  answer: "My answer",
-  profile: "",
-};
-const feedback = (body: unknown = ask) => call("/api/ai/feedback", { method: "POST", body, headers: json });
-const info = (reply: Reply) => JSON.parse(JSON.parse(reply.json.text).tip);
 
-const alive = (pid: number) => {
+function feedback(body: unknown = ask) {
+  return call("/api/ai/feedback", { method: "POST", body, headers: json });
+}
+function info(reply: Reply) {
+  return JSON.parse(JSON.parse(reply.json.text).tip);
+}
+
+function alive(pid: number) {
   try {
     process.kill(pid, 0);
     return true;
   } catch {
     return false;
   }
-};
-const waitFor = async (check: () => boolean, ms = 5000) => {
+}
+
+async function waitFor(check: () => boolean, ms = 5000) {
   const end = Date.now() + ms;
+
   while (!check()) {
     if (Date.now() > end) throw new Error("timed out waiting");
     await new Promise((r) => setTimeout(r, 25));
   }
-};
+}
 
 describe("requests the bridge accepts", () => {
   test("reports status with every known provider", async () => {
@@ -177,10 +193,12 @@ describe("requests the bridge accepts", () => {
 
   test("allows origins listed in CW_ALLOWED_ORIGINS, including the CORS preflight", async () => {
     expect((await call("/api/ai/status", { headers: { Origin: "https://me.github.io" } })).status).toBe(200);
+
     const preflight = await call("/api/ai/feedback", {
       method: "OPTIONS",
       headers: { Origin: "https://me.github.io", "Access-Control-Request-Method": "POST" },
     });
+
     expect(preflight.status).toBe(204);
     expect(preflight.headers["access-control-allow-origin"]).toBe("https://me.github.io");
     expect(preflight.headers["access-control-allow-methods"]).toContain("POST");
@@ -201,6 +219,7 @@ describe("requests the bridge accepts", () => {
       body: ask,
       headers: { "Content-Type": "text/plain" },
     });
+
     expect(res.status).toBe(415);
   });
 
@@ -217,6 +236,7 @@ describe("choosing a tool", () => {
       body: { provider: "off", model: "" },
       headers: json,
     });
+
     expect(res.status).toBe(200);
     expect(res.json).toMatchObject({ enabled: false, preference: { provider: "off" } });
     expect(JSON.parse(readFileSync(configFile, "utf8"))).toEqual({ provider: "off", model: "" });
@@ -233,6 +253,7 @@ describe("choosing a tool", () => {
 
   test("a model that looks like a flag in a hand-edited config is ignored", async () => {
     writeFileSync(configFile, JSON.stringify({ provider: "claude", model: "--auto" }));
+
     const res = await feedback();
     expect(res.status).toBe(200);
     expect(info(res).args.join(" ")).not.toContain("auto");
@@ -250,23 +271,27 @@ describe("choosing a tool", () => {
       headers: json,
       to: lockedPort,
     });
+
     expect(res.status).toBe(409);
     expect(res.json.error.code).toBe("locked");
   });
 
   test("a tool installed while the server runs shows up on the next check", async () => {
     renameSync(fakeClaude, fakeClaude + ".off");
+
     try {
       expect((await call("/api/ai/status")).json.enabled).toBe(false);
     } finally {
       renameSync(fakeClaude + ".off", fakeClaude);
     }
+
     expect((await call("/api/ai/status")).json).toMatchObject({ enabled: true, active: { id: "claude" } });
   });
 
   test("auto never picks a tool that needs a model", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     renameSync(fakeClaude, fakeClaude + ".off");
+
     try {
       const { json: body } = await call("/api/ai/status");
       expect(body.providers.find((p: { id: string }) => p.id === "openai").available).toBe(true);
@@ -304,6 +329,7 @@ describe("asking for feedback", () => {
 
   test("a CLI that fails gives a 502 with its last error line", async () => {
     process.env.FAKE_MODE = "fail";
+
     const res = await feedback();
     expect(res.status).toBe(502);
     expect(res.json.error).toEqual({ code: "provider_error", message: "Error: not logged in" });
@@ -311,12 +337,14 @@ describe("asking for feedback", () => {
 
   test("one answer at a time: a second request while one runs gets a 429", async () => {
     process.env.FAKE_MODE = "slow";
+
     const statuses = (await Promise.all([feedback(), feedback()])).map((r) => r.status).sort();
     expect(statuses).toEqual([200, 429]);
   });
 
   test("closing the connection stops the CLI and frees the bridge", async () => {
     process.env.FAKE_MODE = "hang";
+
     const req = http.request({
       host: "127.0.0.1",
       port,
@@ -324,9 +352,11 @@ describe("asking for feedback", () => {
       method: "POST",
       headers: { Host: `localhost:${port}`, ...json },
     });
+
     req.on("error", () => {});
     req.end(JSON.stringify(ask));
     await waitFor(() => existsSync(pidFile));
+
     const pid = Number(readFileSync(pidFile, "utf8"));
     expect(alive(pid)).toBe(true);
     req.destroy();
@@ -343,10 +373,12 @@ describe("startup options", () => {
       provider: "claude",
       model: "",
     });
+
     expect(bridgeOptions({}, { CW_PROVIDER: "Codex", CW_MODEL: "gpt-5" }).override).toEqual({
       provider: "codex",
       model: "gpt-5",
     });
+
     expect(bridgeOptions({}, {}).override).toBeNull();
   });
 

@@ -1,31 +1,19 @@
 import { useState } from "react";
 import type { MythStep as Step } from "../../content/types";
 import type { CheckResult } from "../../state/progress";
-import { Mark, Verdict } from "./Verdict";
+import { Mark, Verdict, optionState } from "./Verdict";
 
 type Props = { step: Step; result?: CheckResult; onAnswer: (r: CheckResult) => void };
 
 export function MythStep({ step, result, onAnswer }: Props) {
   const [answeredNow, setAnsweredNow] = useState(false);
-  const choice = (value: boolean, label: string) => {
-    const correct = value === step.fact;
-    const chosen = value === result?.pick;
-    const state = !result ? "" : correct ? "right" : chosen ? "wrong" : "dim";
-    return (
-      <button
-        className={`option centered ${state}`}
-        aria-disabled={Boolean(result)}
-        onClick={() => {
-          if (result) return;
-          setAnsweredNow(true);
-          onAnswer({ kind: "myth", ok: correct, pick: value });
-        }}
-      >
-        {result && <Mark correct={correct} chosen={chosen} />}
-        {label}
-      </button>
-    );
-  };
+
+  function pick(value: boolean) {
+    if (result) return;
+
+    setAnsweredNow(true);
+    onAnswer({ kind: "myth", ok: value === step.fact, pick: value });
+  }
 
   return (
     <>
@@ -35,8 +23,8 @@ export function MythStep({ step, result, onAnswer }: Props) {
       </h2>
       <div className="myth-claim prose">{step.claim}</div>
       <div className="myth-choices">
-        {choice(true, "Fact")}
-        {choice(false, "Myth")}
+        <MythChoice label="Fact" value={true} fact={step.fact} result={result} onPick={pick} />
+        <MythChoice label="Myth" value={false} fact={step.fact} result={result} onPick={pick} />
       </div>
       {result && (
         <Verdict
@@ -47,5 +35,29 @@ export function MythStep({ step, result, onAnswer }: Props) {
         />
       )}
     </>
+  );
+}
+
+type MythChoiceProps = {
+  label: string;
+  value: boolean;
+  fact: boolean;
+  result?: CheckResult;
+  onPick: (value: boolean) => void;
+};
+
+function MythChoice({ label, value, fact, result, onPick }: MythChoiceProps) {
+  const correct = value === fact;
+  const chosen = value === result?.pick;
+
+  return (
+    <button
+      className={`option centered ${optionState(Boolean(result), correct, chosen)}`}
+      aria-disabled={Boolean(result)}
+      onClick={() => onPick(value)}
+    >
+      {result && <Mark correct={correct} chosen={chosen} />}
+      {label}
+    </button>
   );
 }

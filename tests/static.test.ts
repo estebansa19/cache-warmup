@@ -25,6 +25,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   port = (server.address() as { port: number }).port;
 });
+
 afterAll(() => server.close());
 
 /** A raw request, so paths like /../ reach the server exactly as written. */
@@ -33,6 +34,7 @@ function get(target: string, host = `localhost:${port}`) {
     const socket = net.connect(port, "127.0.0.1", () =>
       socket.write(`GET ${target} HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`),
     );
+
     let data = "";
     socket.on("data", (c) => (data += c));
     socket.on("end", () => resolve({ status: Number(data.split(" ")[1]), head: data.split("\r\n\r\n")[0] }));

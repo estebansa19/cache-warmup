@@ -21,5 +21,6 @@ export const frontmatterSchema = z.object({
 export type Frontmatter = z.infer<typeof frontmatterSchema>;
 
 /** "title (expected string), track (…)" for an error message. */
-export const describeIssues = (issues: { path: PropertyKey[]; message: string }[]) =>
-  issues.map((i) => `${i.path.map(String).join(".") || "frontmatter"} (${i.message})`).join(", ");
+export function describeIssues(issues: { path: PropertyKey[]; message: string }[]) {
+  return issues.map((i) => `${i.path.map(String).join(".") || "frontmatter"} (${i.message})`).join(", ");
+}

@@ -1,7 +1,7 @@
 // The interviewer prompt. It's built here, on the server, so the feedback endpoint only ever
 // grades an answer: callers send the pieces, never a prompt of their own.
 
-import { coded } from "./providers.mjs";
+import { coded } from "./errors.mjs";
 
 /** Longest accepted pieces, in characters. Far above real use; they only stop abuse. */
 export const LIMITS = { question: 1_000, rubricItems: 12, rubricItem: 500, answer: 10_000, profile: 2_000 };
@@ -20,26 +20,45 @@ export const LIMITS = { question: 1_000, rubricItems: 12, rubricItem: 500, answe
  * @returns {FeedbackRequest}
  */
 export function readFeedbackRequest(body) {
-  const b = /** @type {Record<string, unknown>} */ (body && typeof body === "object" ? body : {});
-  const text = (/** @type {keyof typeof LIMITS} */ key, required = true) => {
-    const value = b[key] ?? "";
-    if (typeof value !== "string") throw coded("bad_request", `"${key}" must be text.`);
-    if (required && !value.trim()) throw coded("bad_request", `"${key}" is empty.`);
-    if (value.length > LIMITS[key]) throw coded("bad_request", `"${key}" is too long.`);
-    return value;
+  const fields = /** @type {Record<string, unknown>} */ (body && typeof body === "object" ? body : {});
+  const rubric = readRubric(fields.rubric);
+
+  return {
+    question: readText(fields, "question"),
+    rubric,
+    answer: readText(fields, "answer"),
+    profile: readText(fields, "profile", { required: false }),
   };
-  const rubric = b.rubric ?? null;
-  if (
-    rubric !== null &&
-    !(
-      Array.isArray(rubric) &&
-      rubric.length <= LIMITS.rubricItems &&
-      rubric.every((item) => typeof item === "string" && item.length <= LIMITS.rubricItem)
-    )
-  ) {
-    throw coded("bad_request", `"rubric" must be a short list of text, or null.`);
-  }
-  return { question: text("question"), rubric, answer: text("answer"), profile: text("profile", false) };
+}
+
+/**
+ * One text field, checked against its limit.
+ * @param {Record<string, unknown>} fields
+ * @param {keyof typeof LIMITS} key
+ * @returns {string}
+ */
+function readText(fields, key, { required = true } = {}) {
+  const value = fields[key] ?? "";
+  if (typeof value !== "string") throw coded("bad_request", `"${key}" must be text.`);
+  if (required && !value.trim()) throw coded("bad_request", `"${key}" is empty.`);
+  if (value.length > LIMITS[key]) throw coded("bad_request", `"${key}" is too long.`);
+  return value;
+}
+
+/**
+ * The rubric: null, or a short list of short strings.
+ * @param {unknown} value
+ * @returns {string[] | null}
+ */
+function readRubric(value = null) {
+  if (value === null) return null;
+  if (Array.isArray(value) && value.length <= LIMITS.rubricItems && value.every(isShortText)) return value;
+  throw coded("bad_request", `"rubric" must be a short list of text, or null.`);
+}
+
+/** @param {unknown} item */
+function isShortText(item) {
+  return typeof item === "string" && item.length <= LIMITS.rubricItem;
 }
 
 /** @param {FeedbackRequest} request */

@@ -76,12 +76,10 @@ export type Lesson = {
 
 export type ExtraQuestion = { id: string; topic: string; q: string };
 
-export const isCheck = (step: PlayerStep): step is CheckStep =>
-  step.kind === "quiz" || step.kind === "myth" || step.kind === "order";
+export function isCheck(step: PlayerStep): step is CheckStep {
+  return step.kind === "quiz" || step.kind === "myth" || step.kind === "order";
+}
 
-export const playerSteps = (lesson: Lesson): PlayerStep[] => [
-  { kind: "hook" },
-  ...lesson.steps,
-  { kind: "interview" },
-  { kind: "recap" },
-];
+export function playerSteps(lesson: Lesson): PlayerStep[] {
+  return [{ kind: "hook" }, ...lesson.steps, { kind: "interview" }, { kind: "recap" }];
+}

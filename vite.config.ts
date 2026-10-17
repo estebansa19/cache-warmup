@@ -17,6 +17,7 @@ function aiBridge(): Plugin {
     name: "cache-warmup-ai-bridge",
     async configureServer(server) {
       const bridge = await createBridge({ ...bridgeOptions({}, process.env), log: false });
+
       server.middlewares.use((req, res, next) => {
         if (req.url?.startsWith("/api/")) bridge.handle(req, res).catch(next);
         else next();
