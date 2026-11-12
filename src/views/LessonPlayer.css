@@ -383,14 +383,14 @@
   font-weight: 700;
 }
 
-/* On phones the hint gets its own line under the buttons. */
-@media (max-width: 520px) {
+/* Phones: Back and Next stay within reach at the bottom of the screen, however long the step is. */
+@media (max-width: 720px) {
   .player-nav {
-    flex-wrap: wrap;
-  }
-
-  .player-hint {
-    order: 3;
-    flex-basis: 100%;
+    position: sticky;
+    bottom: 0;
+    margin-inline: -16px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--sheet);
+    border-top: 1px solid var(--rule);
   }
 }

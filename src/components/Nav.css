@@ -96,8 +96,20 @@
   line-height: 1.6;
 }
 
-/* Phones: every link stays visible, wrapping to a second row instead of scrolling out of view. */
+/*
+ * Phones: every link stays visible, wrapping to a second row instead of scrolling out of view.
+ * Two rows are too tall to keep on screen, so the bar scrolls with the page, and a lesson
+ * (which has its own "← Path" link) drops it to give the room to the step.
+ */
 @media (max-width: 720px) {
+  .topbar {
+    position: static;
+  }
+
+  .topbar.in-lesson {
+    display: none;
+  }
+
   .topbar-inner {
     gap: 10px;
   }
@@ -110,7 +122,7 @@
   }
 
   .nav a {
-    padding: 5px 9px;
+    padding: 8px 10px;
   }
 }
 

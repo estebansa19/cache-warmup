@@ -19,7 +19,7 @@ export function Nav({ route }: { route: Route }) {
   const current = route.view === "lesson" ? "home" : route.view;
 
   return (
-    <header className="topbar">
+    <header className={route.view === "lesson" ? "topbar in-lesson" : "topbar"}>
       <div className="topbar-inner">
         <a className="brand" href="#/" aria-label="Cache Warmup home">
           <span className="brand-mark" aria-hidden="true">
