@@ -4,7 +4,7 @@ import { legacy } from "../../content/lessons";
 import { normalize } from "../../state/normalize";
 import { emptyProgress } from "../../state/progress";
 import { useProgress } from "../../state/ProgressContext";
-import { exportFileName } from "../../state/storage";
+import { clearUnreadable, exportFileName, readUnreadable } from "../../state/storage";
 import { downloadFile } from "../../utils/download";
 import { plural } from "../../utils/text";
 import { Notices, type Message } from "./Notices";
@@ -44,6 +44,7 @@ export function ProgressSettings() {
     <section className="panel settings-card">
       <p className="eyebrow">Your progress</p>
       <p>Move your progress to another browser or computer, or keep a backup.</p>
+      <UnreadableCopy />
       <Notices message={message} />
       <div className="row">
         <button className="btn ghost small" onClick={exportProgress}>
@@ -72,5 +73,34 @@ export function ProgressSettings() {
         />
       </div>
     </section>
+  );
+}
+
+/** A way to get back saved progress this version couldn't read (see parseStored in storage.ts). */
+function UnreadableCopy() {
+  const [copy, setCopy] = useState(readUnreadable);
+  if (!copy) return null;
+
+  function discard() {
+    clearUnreadable();
+    setCopy(null);
+  }
+
+  return (
+    <div className="kept-copy">
+      <p>
+        This browser had saved progress that this version of the app couldn't read, so it started fresh. A
+        copy of what was saved is kept here.
+      </p>
+      <div className="row">
+        <button
+          className="btn ghost small"
+          onClick={() => downloadFile(exportFileName("progress-unreadable"), copy)}
+        >
+          Export the copy
+        </button>
+        <ConfirmButton small label="Discard it…" confirmLabel="Yes, discard the copy" onConfirm={discard} />
+      </div>
+    </div>
   );
 }
