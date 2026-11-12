@@ -3,8 +3,9 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "../src/App";
-import { lessons } from "../src/content/lessons";
+import { extraQuestions, lessons } from "../src/content/lessons";
 import { playerSteps } from "../src/content/types";
+import { XP } from "../src/state/levels";
 import { STORAGE_KEY } from "../src/state/storage";
 
 // Whole screens in a browser-like page: what you can click, and what gets saved when you do.
@@ -77,5 +78,21 @@ describe("finishing a lesson", () => {
     await click(control(/Path/));
 
     expect(savedProgress().done[lesson.id]).toBeUndefined();
+  });
+});
+
+describe("an interview question with no strong answer, without AI", () => {
+  const question = extraQuestions[0];
+  const draft = "word ".repeat(45);
+
+  test("checking your answer yourself completes the rep", async () => {
+    await open("#/gym", { iv: { [question.id]: { draft } } });
+    await click(
+      [...page.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent?.includes(question.q)),
+    );
+    await click(control(/Check it yourself/));
+
+    expect(page.textContent).toContain("Self-check");
+    expect(savedProgress()).toMatchObject({ xp: XP.interview, iv: { [question.id]: { xp: true } } });
   });
 });
