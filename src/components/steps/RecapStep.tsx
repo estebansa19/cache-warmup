@@ -1,27 +1,16 @@
 import type { Lesson } from "../../content/types";
 import { hrefFor } from "../../router";
-import { XP } from "../../state/levels";
 import { useProgress } from "../../state/ProgressContext";
-import { cardKey, lessonScore } from "../../state/selectors";
-import { prettyDay, today } from "../../utils/dates";
+import { lessonScore } from "../../state/selectors";
+import { prettyDay } from "../../utils/dates";
 
+/** The last step: the cheat sheet and how the lesson went. The player's main button finishes it. */
 export function RecapStep({ lesson }: { lesson: Lesson }) {
-  const { progress, dispatch } = useProgress();
+  const { progress } = useProgress();
   const score = lessonScore(lesson, progress);
   const done = progress.done[lesson.id];
   const finishedOn = done ? prettyDay(done.at) : "";
   const interviewDone = Boolean(progress.iv[lesson.id]?.xp);
-
-  function finish() {
-    dispatch({
-      type: "finish",
-      lessonId: lesson.id,
-      correct: score.correct,
-      total: score.total,
-      cardKeys: lesson.cards.map((card) => cardKey(lesson, card)),
-      today: today(),
-    });
-  }
 
   return (
     <>
@@ -54,21 +43,13 @@ export function RecapStep({ lesson }: { lesson: Lesson }) {
             deck.
           </div>
           <div className="row">
-            <a className="btn" href={hrefFor({ view: "home" })}>
-              Back to the path
-            </a>
             <a className="btn ghost" href={hrefFor({ view: "notes" })}>
               All cheat sheets
             </a>
           </div>
         </>
       ) : (
-        <div className="row">
-          <button className="btn" onClick={finish}>
-            Finish lesson · +{XP.lesson} XP
-          </button>
-          <span className="muted">Adds {lesson.cards.length} flashcards. First review is tomorrow.</span>
-        </div>
+        <p className="muted">Finishing adds {lesson.cards.length} flashcards. First review is tomorrow.</p>
       )}
     </>
   );

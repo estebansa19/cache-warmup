@@ -11,7 +11,7 @@ import { hrefFor } from "../router";
 import { XP } from "../state/levels";
 import { useProgress } from "../state/ProgressContext";
 import type { CheckResult } from "../state/progress";
-import { checkKey, resultFor } from "../state/selectors";
+import { cardKey, checkKey, lessonScore, resultFor } from "../state/selectors";
 import { today } from "../utils/dates";
 import { focusFirst } from "../utils/focus";
 import "./LessonPlayer.css";
@@ -25,8 +25,10 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
   const result = isCheck(step) ? resultFor(lesson, step, progress) : undefined;
   const blocked = isCheck(step) && !result;
   const hint = stepHint(step, blocked);
+  const done = Boolean(progress.done[lesson.id]);
   const sheet = useRef<HTMLElement>(null);
   const shownPos = useRef(pos);
+  const wasDone = useRef(done);
 
   // Remember this lesson for "continue" (and restart it if you finished it and left it on the last step).
   useEffect(() => {
@@ -40,6 +42,16 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
     shownPos.current = pos;
     focusFirst(sheet.current, "h2");
   }, [pos]);
+
+  // Finishing replaces the button you pressed: take focus (and the view) to what it produced.
+  useEffect(() => {
+    if (done && !wasDone.current) {
+      focusFirst(sheet.current, "h2");
+      window.scrollTo(0, 0);
+    }
+
+    wasDone.current = done;
+  }, [done]);
 
   // ← and → move between steps, but not while typing or with a modifier (Alt+← is "back" in browsers).
   const onKey = useEffectEvent((e: KeyboardEvent) => {
@@ -67,6 +79,19 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
     if (isCheck(step)) dispatch({ type: "answer", key: checkKey(lesson, step), result: r, today: today() });
   }
 
+  function finish() {
+    const score = lessonScore(lesson, progress);
+
+    dispatch({
+      type: "finish",
+      lessonId: lesson.id,
+      correct: score.correct,
+      total: score.total,
+      cardKeys: lesson.cards.map((card) => cardKey(lesson, card)),
+      today: today(),
+    });
+  }
+
   return (
     <div className="player">
       <div className="player-top">
@@ -92,22 +117,52 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
         <span className="player-hint" id="player-hint">
           {hint}
         </span>
-        {pos === last ? (
-          <a className="btn ghost" href={hrefFor({ view: "home" })}>
-            Done
-          </a>
-        ) : (
-          <button
-            className="btn"
-            onClick={() => go(pos + 1)}
-            disabled={blocked}
-            aria-describedby={hint ? "player-hint" : undefined}
-          >
-            {nextLabel(step, Boolean(progress.iv[lesson.id]?.draft))}
-          </button>
-        )}
+        <ForwardButton
+          atEnd={pos === last}
+          done={done}
+          blocked={blocked}
+          label={nextLabel(step, Boolean(progress.iv[lesson.id]?.draft))}
+          describedBy={hint ? "player-hint" : undefined}
+          onNext={() => go(pos + 1)}
+          onFinish={finish}
+        />
       </div>
     </div>
+  );
+}
+
+type ForwardButtonProps = {
+  atEnd: boolean;
+  done: boolean;
+  blocked: boolean;
+  label: string;
+  describedBy?: string;
+  onNext: () => void;
+  onFinish: () => void;
+};
+
+/** The one way forward: the next step, then finishing the lesson, then back to the path. */
+function ForwardButton({ atEnd, done, blocked, label, describedBy, onNext, onFinish }: ForwardButtonProps) {
+  if (!atEnd) {
+    return (
+      <button className="btn" onClick={onNext} disabled={blocked} aria-describedby={describedBy}>
+        {label}
+      </button>
+    );
+  }
+
+  if (!done) {
+    return (
+      <button className="btn" onClick={onFinish}>
+        Finish lesson · +{XP.lesson} XP
+      </button>
+    );
+  }
+
+  return (
+    <a className="btn" href={hrefFor({ view: "home" })}>
+      Back to the path
+    </a>
   );
 }
 
