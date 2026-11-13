@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "../src/App";
 import { extraQuestions, lessons } from "../src/content/lessons";
 import { playerSteps, type MythStep } from "../src/content/types";
+import { cardKey } from "../src/state/selectors";
 import { XP } from "../src/state/levels";
 import { STORAGE_KEY } from "../src/state/storage";
 
@@ -48,6 +49,11 @@ function control(label: RegExp, within: ParentNode = page) {
 async function click(element: HTMLElement | undefined) {
   expect(element).toBeDefined();
   await act(async () => element!.click());
+}
+
+/** Presses `key` with nothing focused, the way a keyboard shortcut usually arrives. */
+async function press(key: string) {
+  await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key })));
 }
 
 /** What's in storage once the app has saved (leaving the page saves right away). */
@@ -116,5 +122,43 @@ describe("an interview question with no strong answer, without AI", () => {
 
     expect(page.textContent).toContain("Self-check");
     expect(savedProgress()).toMatchObject({ xp: XP.interview, iv: { [question.id]: { xp: true } } });
+  });
+});
+
+describe("keyboard shortcuts", () => {
+  const lesson = lessons[0];
+  const quizAt = playerSteps(lesson).findIndex((step) => step.kind === "quiz");
+
+  test("Enter moves to the next step, and the letter on an option picks that option", async () => {
+    await open(`#/lesson/${lesson.id}`, { pos: { [lesson.id]: quizAt - 1 } });
+    await press("Enter");
+    expect(page.textContent).toContain("Quick check");
+
+    const options = [...page.querySelectorAll(".options .option")];
+    const labeledB = options.findIndex((option) => option.querySelector(".option-key")?.textContent === "B");
+    await press("b");
+
+    expect(page.querySelector(".verdict")).not.toBeNull();
+    expect(options[labeledB].className).toMatch(/right|wrong/);
+    expect(options.filter((option) => /wrong/.test(option.className)).length).toBeLessThanOrEqual(1);
+  });
+
+  test("Enter waits while a check is unanswered", async () => {
+    await open(`#/lesson/${lesson.id}`, { pos: { [lesson.id]: quizAt } });
+    await press("Enter");
+
+    expect(savedProgress().pos[lesson.id]).toBe(quizAt);
+  });
+
+  test("in review, Space shows the answer and 2 means you got it", async () => {
+    const key = cardKey(lesson, lesson.cards[0]);
+    await open("#/review", { cards: { [key]: { box: 0, due: "2026-01-01" } } });
+    await click(control(/Start review/));
+
+    await press(" ");
+    expect(page.querySelector(".card-back")).not.toBeNull();
+
+    await press("2");
+    expect(savedProgress().cards[key].box).toBe(1);
   });
 });

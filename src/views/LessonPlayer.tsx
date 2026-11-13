@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InterviewRep } from "../components/InterviewRep";
 import { Check } from "../components/steps/Check";
 import { HookStep } from "../components/steps/HookStep";
@@ -13,6 +13,7 @@ import type { CheckResult } from "../state/progress";
 import { cardKey, checkKey, lessonScore, resultFor, traceState } from "../state/selectors";
 import { today } from "../utils/dates";
 import { focusFirst } from "../utils/focus";
+import { useShortcuts } from "../utils/keys";
 import "./LessonPlayer.css";
 
 export function LessonPlayer({ lesson }: { lesson: Lesson }) {
@@ -53,22 +54,11 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
     wasDone.current = done;
   }, [done]);
 
-  // ← and → move between steps, but not while typing or with a modifier (Alt+← is "back" in browsers).
-  const onKey = useEffectEvent((e: KeyboardEvent) => {
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-
-    const target = e.target instanceof HTMLElement ? e.target : null;
-    if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
-
-    if (e.key === "ArrowRight" && !blocked && pos < last) go(pos + 1);
-    if (e.key === "ArrowLeft" && pos > 0) go(pos - 1);
+  // ← and → move between steps, and Enter goes forward like Next. Finishing stays a deliberate click.
+  useShortcuts((key) => {
+    if ((key === "ArrowRight" || key === "Enter") && !blocked && pos < last) go(pos + 1);
+    if (key === "ArrowLeft" && pos > 0) go(pos - 1);
   });
-
-  useEffect(() => {
-    const listener = (e: KeyboardEvent) => onKey(e);
-    window.addEventListener("keydown", listener);
-    return () => window.removeEventListener("keydown", listener);
-  }, []);
 
   function go(to: number) {
     dispatch({ type: "move", lessonId: lesson.id, pos: clamp(to, last) });
