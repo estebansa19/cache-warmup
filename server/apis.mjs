@@ -11,10 +11,11 @@ const ANTHROPIC_DEFAULT_MODEL = "claude-opus-5-5";
 
 // Server-side fallbacks retry a declined request on a suitable model. Only these models support it.
 const ANTHROPIC_FALLBACK_MODELS = [
+  "claude-fable-5-2",
+  "claude-fable-5-1",
   "claude-opus-5-5",
   "claude-opus-5",
   "claude-sonnet-5-5",
-  "claude-fable-5-1",
 ];
 
 /**
