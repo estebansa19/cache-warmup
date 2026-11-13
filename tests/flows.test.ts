@@ -7,7 +7,9 @@ import { extraQuestions, lessons } from "../src/content/lessons";
 import { playerSteps, type MythStep } from "../src/content/types";
 import { cardKey } from "../src/state/selectors";
 import { XP } from "../src/state/levels";
+import { upgradeCost } from "../src/state/prod";
 import { STORAGE_KEY } from "../src/state/storage";
+import { upgradeFor } from "../src/content/upgrades";
 
 // Whole screens in a browser-like page: what you can click, and what gets saved when you do.
 
@@ -106,6 +108,43 @@ describe("finishing a lesson", () => {
     await click(control(/Path/));
 
     expect(savedProgress().done[lesson.id]).toBeUndefined();
+  });
+});
+
+describe("prod", () => {
+  const [first, second] = lessons;
+  const finished = { [first.id]: { at: "2026-10-15", correct: 1, total: 1 } };
+
+  test("finishing a lesson unlocks its upgrade, and XP installs it", async () => {
+    await open("#/prod", { xp: 100, done: finished });
+    const [, firstUnit, secondUnit] = page.querySelectorAll<HTMLElement>(".unit");
+
+    expect(control(new RegExp(`Lesson ${second.n}`), secondUnit)).toBeDefined();
+    await click(control(/Install/, firstUnit));
+
+    const saved = savedProgress();
+    expect(saved.prod.owned).toEqual({ [first.id]: 1 });
+    expect(saved.prod.at).toBeGreaterThan(0); // opening prod booted it
+    expect(saved.xp).toBe(100);
+    expect(control(/Upgrade/, firstUnit)?.textContent).toContain(`${upgradeCost(first.id, 1)} XP`);
+  });
+
+  test("the diagram fills in when you buy from it", async () => {
+    await open("#/prod", { xp: 100, done: finished });
+    const box = page.querySelector<SVGElement>(".map-node.empty[role=button]");
+    expect(page.querySelectorAll(".map-node.locked")).toHaveLength(lessons.length - 1);
+
+    await act(async () => box!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    expect(box!.classList.contains("running")).toBe(true);
+    expect(savedProgress().prod.owned).toEqual({ [first.id]: 1 });
+  });
+
+  test("the warm-up trace says what a finished lesson unlocked", async () => {
+    await open(`#/lesson/${first.id}`, { pos: { [first.id]: playerSteps(first).length - 1 } });
+    await click(control(/Finish lesson/));
+
+    expect(page.textContent).toContain(`Unlocked in prod: ${upgradeFor(first).name}`);
   });
 });
 

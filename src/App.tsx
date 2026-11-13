@@ -12,12 +12,14 @@ import { CheatSheets } from "./views/CheatSheets";
 import { Gym } from "./views/Gym";
 import { Home } from "./views/Home";
 import { LessonPlayer } from "./views/LessonPlayer";
+import { Prod } from "./views/Prod";
 import { Review } from "./views/Review";
 import { Settings } from "./views/settings/Settings";
 
 const TITLES: Record<Exclude<Route["view"], "lesson">, string> = {
   home: "",
   review: "Review",
+  prod: "Prod",
   gym: "Interview gym",
   notes: "Cheat sheets",
   settings: "Settings",
@@ -74,6 +76,8 @@ function renderView(route: Route, lesson: Lesson | undefined) {
       return lesson ? <LessonPlayer key={lesson.id} lesson={lesson} /> : <Home />;
     case "review":
       return <Review />;
+    case "prod":
+      return <Prod />;
     case "gym":
       return <Gym />;
     case "notes":

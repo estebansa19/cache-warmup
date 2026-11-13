@@ -1,0 +1,224 @@
+/* Prod's architecture diagram (see ProdMap.tsx). Sizes are in the SVG's own units. */
+
+/* Below this width the labels get too small to read, so phones scroll the diagram sideways. */
+.map-scroll {
+  overflow-x: auto;
+}
+
+.map {
+  display: block;
+  width: 100%;
+  min-width: 680px;
+  height: auto;
+  font-family: var(--f-body);
+}
+
+.map-frame rect {
+  fill: var(--code-bg);
+  stroke: var(--rule);
+}
+
+.map-title {
+  font-family: var(--f-display);
+  font-size: 17px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+
+.map-label {
+  font-size: 14px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+
+/* The code modules inside the app tier are narrow. */
+.map-label.narrow {
+  font-size: 12px;
+}
+
+.map-tag {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  fill: var(--ink-3);
+}
+
+.map-glyph {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1.5;
+}
+
+/* Wires, and the requests flowing along them as dots. */
+.map-wire {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1.5;
+}
+
+.map-wire.support {
+  stroke-dasharray: 3 4;
+}
+
+#prod-map-arrow path {
+  fill: var(--ink-3);
+}
+
+.map-flow {
+  fill: none;
+  stroke: var(--cobalt);
+  stroke-width: var(--flow-size);
+  stroke-linecap: round;
+  stroke-dasharray: 0 24;
+  animation: map-flow var(--flow-speed) linear infinite;
+}
+
+/* Boxes: running is solid, still to install is dashed, paged is red, maxed is highlighted. */
+.map-node rect {
+  fill: var(--sheet);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  transition:
+    fill 0.3s ease,
+    stroke 0.3s ease;
+}
+
+.map-node.locked rect,
+.map-node.empty rect {
+  fill: transparent;
+  stroke: var(--ink-3);
+  stroke-dasharray: 5 4;
+}
+
+.map-node.locked .map-label {
+  fill: var(--ink-3);
+}
+
+.map-node.empty rect {
+  stroke: var(--cobalt);
+}
+
+.map-node.empty .map-tag {
+  fill: var(--cobalt);
+}
+
+.map-node.paged rect {
+  fill: var(--bad-bg);
+  stroke: var(--bad);
+  stroke-dasharray: 5 4;
+}
+
+.map-node.paged .map-tag {
+  fill: var(--bad);
+}
+
+.map-node.maxed rect {
+  fill: var(--hl);
+}
+
+.map-pips rect {
+  fill: transparent;
+  stroke: var(--rule);
+}
+
+.map-pips rect.on {
+  fill: var(--cobalt);
+  stroke: var(--cobalt);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: map-pop 0.35s ease-out;
+}
+
+.map-servers rect {
+  fill: transparent;
+  stroke: var(--rule);
+}
+
+.map-servers rect.laptop {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+
+.map-servers rect.on {
+  fill: var(--good);
+  stroke: var(--good);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation:
+    map-pop 0.35s ease-out,
+    map-blink 1.8s steps(1) calc(var(--i) * -170ms) infinite;
+}
+
+/* What you can buy right from the diagram. */
+.map-add rect {
+  fill: var(--ink);
+}
+
+.map-add text {
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--sheet);
+}
+
+[role="button"].map-node,
+[role="button"].map-add {
+  cursor: pointer;
+  outline: none;
+}
+
+[role="button"].map-node:hover rect,
+[role="button"].map-node:focus-visible rect {
+  stroke: var(--cobalt);
+  stroke-width: 3;
+  stroke-dasharray: none;
+}
+
+.map-add:hover rect,
+.map-add:focus-visible rect {
+  stroke: var(--hl-strong);
+  stroke-width: 3;
+}
+
+/* The box you just bought: a highlighter ring that swells and fades. */
+.map-flash {
+  fill: none;
+  stroke: var(--hl-strong);
+  stroke-width: 4;
+  /* Invisible once played, and never shown when animations are turned off. */
+  opacity: 0;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: map-flash 0.9s ease-out forwards;
+}
+
+@keyframes map-flow {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes map-pop {
+  from {
+    transform: scale(0.3);
+  }
+}
+
+@keyframes map-blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes map-flash {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}

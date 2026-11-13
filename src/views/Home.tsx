@@ -5,11 +5,12 @@ import { TRACKS, playerSteps, type Lesson } from "../content/types";
 import { hrefFor } from "../router";
 import { streak } from "../state/levels";
 import { useProgress } from "../state/ProgressContext";
-import { lessonStatus, nextLesson } from "../state/selectors";
+import { SERVERS, canBuy, pagedCount, stageInfo, throughput, xpToSpend } from "../state/prod";
+import { lessonStatus, nextLesson, prodHealth } from "../state/selectors";
 import { TIERS, dueCardKeys, nextDueDay, tierCounts } from "../state/srs";
 import type { Progress } from "../state/progress";
 import { prettyDay, today, type Day } from "../utils/dates";
-import { plural, twoDigits } from "../utils/text";
+import { compact, plural, twoDigits } from "../utils/text";
 import "./Home.css";
 
 export function Home() {
@@ -68,6 +69,7 @@ function Stats({ progress }: { progress: Progress }) {
       </div>
       <MemoryHierarchy progress={progress} />
       <ReviewRow progress={progress} />
+      <ProdRow progress={progress} />
     </div>
   );
 }
@@ -173,6 +175,29 @@ function ReviewRow({ progress }: { progress: Progress }) {
           {due ? `Review ${due}` : "Practice anyway"}
         </a>
       )}
+    </div>
+  );
+}
+
+/** Prod in one line: how big it's grown, and a nudge when there's XP to spend or an upgrade paged. */
+function ProdRow({ progress }: { progress: Progress }) {
+  const health = prodHealth(lessons, progress, today());
+  const { rps } = throughput(progress.prod.owned, health);
+  const paged = pagedCount(progress.prod.owned, health);
+  const shopping = [SERVERS, ...lessons.map((l) => l.id)].some((id) => canBuy(progress, id));
+  const text = paged
+    ? `${plural(paged, "upgrade")} paged by a cold lesson. Review to bring ${paged === 1 ? "it" : "them"} back.`
+    : `${compact(rps)} req/s · ${xpToSpend(progress)} XP to spend`;
+
+  return (
+    <div className="review-row">
+      <div>
+        <h2>Prod: {stageInfo(rps).name}</h2>
+        <p>{text}</p>
+      </div>
+      <a className={shopping ? "btn small" : "btn ghost small"} href={hrefFor({ view: "prod" })}>
+        {shopping ? "Spend XP" : "Open prod"}
+      </a>
     </div>
   );
 }
