@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseLooseJson } from "../src/ai/client";
+import { parseLooseJson, serverBase } from "../src/ai/client";
 import { toFeedback } from "../src/ai/feedback";
 import { LIMITS, feedbackPrompt, readFeedbackRequest } from "../server/prompt.mjs";
 
@@ -15,6 +15,20 @@ describe("parseLooseJson", () => {
     expect(parseLooseJson('\x1b[32m{"score": 5}\x1b[0m')).toEqual({ score: 5 }));
 
   test("garbage gives null", () => expect(parseLooseJson("no json here")).toBeNull());
+});
+
+describe("serverBase", () => {
+  test("the app's own address, when it's served from this machine", () => {
+    expect(serverBase("", "localhost")).toBe("");
+    expect(serverBase("", "127.0.0.1")).toBe("");
+    expect(serverBase("", "[::1]")).toBe("");
+  });
+
+  test("no server on a static host or another machine, unless Settings names one", () => {
+    expect(serverBase("", "someone.github.io")).toBeNull();
+    expect(serverBase("", "192.168.1.20")).toBeNull();
+    expect(serverBase(" http://localhost:4317/ ", "someone.github.io")).toBe("http://localhost:4317");
+  });
 });
 
 describe("toFeedback", () => {
