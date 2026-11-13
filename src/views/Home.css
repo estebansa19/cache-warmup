@@ -130,6 +130,11 @@
   font-size: var(--step-1);
 }
 
+.review-row .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
 .review-row p {
   color: var(--ink-2);
   font-size: var(--step--1);
