@@ -25,6 +25,9 @@ Every lesson opens with a real-world scenario ("two workers both charged the sam
 - **An interview question:** you write the answer you'd give in the room, then compare it with a strong answer, or ask an AI interviewer for feedback (see below).
 - **A cheat sheet** that you can skim the night before an interview.
 - **Flashcards with spaced repetition.** Cards climb a memory hierarchy (Disk → RAM → L2 → L1) when you remember them and drop back when you don't.
+- **A warm-up trace when you finish.** Each check shows up as a cache hit or miss, and every miss gets one retry. On the path, each finished lesson shows how warm it is: warm, hot once its cards reach the top tiers, cooling when cards come due, and cold after a week of waiting.
+
+It works from the keyboard (A–D or 1–4 to answer, Enter or → for the next step, Space to flip a flashcard), and has light and dark themes in Settings → Appearance.
 
 There's also an **Interview gym** with every lesson's question plus 12 extra ones, plus XP and levels from Intern to Distinguished. (Yes, everyone starts as an Intern.)
 

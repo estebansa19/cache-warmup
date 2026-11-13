@@ -23,9 +23,11 @@ src/
   components/         pieces shared between screens; steps/ has one component per step type
   state/              progress (progress.ts: its shape and the reducer; normalize.ts: reading saved
                       or imported data; storage.ts: localStorage), spaced repetition, levels
-  utils/              small helpers with no app knowledge: dates, text, shuffling, focus, downloads
+  utils/              small helpers with no app knowledge: dates, text, shuffling, focus, keyboard
+                      shortcuts, downloads
   ai/                 talks to the AI server and reads the feedback it sends back
-  styles/             design tokens and shared styles; each view keeps its own CSS next to it
+  styles/             design tokens (light and dark), the theme setting, and shared styles; each view
+                      keeps its own CSS next to it
 server/               plain JavaScript with no dependencies, type-checked through JSDoc comments
   index.mjs           `npm start`: serves the built app and the AI endpoints
   static.mjs          serves dist/ (security headers, no hidden files)
@@ -37,7 +39,8 @@ server/               plain JavaScript with no dependencies, type-checked throug
   errors.mjs          CodedError, which bridge.mjs turns into an HTTP status
   options.mjs         flags and environment variables, shared by `npm start` and `npm run dev`
   config.mjs          reads and writes cache-warmup.config.json
-tests/                Vitest: lessons, the lesson parser, progress logic, AI parsing, the servers
+tests/                Vitest: lessons, the lesson parser, progress logic, AI parsing, the servers, and
+                      whole screens in a simulated browser (flows.test.ts)
 ```
 
 There's no state library and no router library. Progress is one object behind `useProgress()`, and routes are hash links like `#/lesson/indexes`.
@@ -165,6 +168,8 @@ A strong answer, in Markdown.
 Put each tag (`<Quiz>`, `<Why>`, and so on) on its own line, with a blank line between it and the Markdown next to it. Content on the same line as a tag isn't read as Markdown, and without the blank line a tag can be swallowed by the block before it: a `<Why>` right after the last option ends up inside that option. Blank lines between quiz options are fine. Don't indent the content inside tags; MDX doesn't need it, and the files stay easier to read.
 
 Each check gets an id that answers are saved under: a hash of its text. If you reword a check that's already published, give it an id first so people keep their answers: `<Quiz id="covering-index">` (lowercase letters, digits and dashes, starting with a letter). Flashcards are saved under their front, so fixing a typo on a card's front resets that one card.
+
+Name a code block's language after its opening fence (` ```ruby `, ` ```sql `) and it's highlighted when the app is built. A block without one stays plain.
 
 **One MDX quirk:** `{`, `}` and `<` mean something in MDX. In normal text, put them inside backticks (`` `a < b` ``) or escape them (`\{`). If you forget, the dev server shows an error with the file and line.
 
