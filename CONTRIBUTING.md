@@ -18,11 +18,12 @@ src/
   lessons/            one .mdx file per lesson (most contributions happen here)
   content/            turns MDX into lessons: parse-lesson.ts, the frontmatter schema, the
                       build-time lesson check (check-lesson.ts), the components lessons can use, types
-  views/              one component per screen: Home, LessonPlayer, Review, Gym, CheatSheets, and
+  views/              one component per screen: Home, LessonPlayer, Review, Prod, Gym, CheatSheets, and
                       settings/ (one file per section)
   components/         pieces shared between screens; steps/ has one component per step type
   state/              progress (progress.ts: its shape and the reducer; normalize.ts: reading saved
-                      or imported data; storage.ts: localStorage), spaced repetition, levels
+                      or imported data; storage.ts: localStorage), spaced repetition, levels,
+                      and prod.ts (the idle game XP pays for)
   utils/              small helpers with no app knowledge: dates, text, shuffling, focus, keyboard
                       shortcuts, downloads
   ai/                 talks to the AI server and reads the feedback it sends back
@@ -186,7 +187,7 @@ The whole point of this project is that it's **not** a textbook. Some guidelines
 - **Plain language.** Write it the way you'd explain it to a colleague over coffee.
 - **Be accurate.** If a fact depends on a version or vendor, say so ("Postgres defaults to Read Committed; MySQL InnoDB to Repeatable Read").
 
-Extra Interview gym questions live in `src/content/extra-questions.ts`.
+Extra Interview gym questions live in `src/content/extra-questions.ts`. Each lesson also unlocks a Prod upgrade: name it in `src/content/upgrades.ts` and place its box in `src/views/ProdMap.tsx`. Without them it's named after the lesson and left out of the diagram.
 
 ## Before opening a pull request
 
