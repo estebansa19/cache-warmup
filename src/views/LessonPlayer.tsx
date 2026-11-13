@@ -112,7 +112,7 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
           atEnd={pos === last}
           done={done}
           blocked={blocked}
-          label={nextLabel(step, Boolean(progress.iv[lesson.id]?.draft))}
+          next={nextAction(step, Boolean(progress.iv[lesson.id]?.draft))}
           describedBy={hint ? "player-hint" : undefined}
           onNext={() => go(pos + 1)}
           onFinish={finish}
@@ -126,18 +126,23 @@ type ForwardButtonProps = {
   atEnd: boolean;
   done: boolean;
   blocked: boolean;
-  label: string;
+  next: { label: string; quiet: boolean };
   describedBy?: string;
   onNext: () => void;
   onFinish: () => void;
 };
 
 /** The one way forward: the next step, then finishing the lesson, then back to the path. */
-function ForwardButton({ atEnd, done, blocked, label, describedBy, onNext, onFinish }: ForwardButtonProps) {
+function ForwardButton({ atEnd, done, blocked, next, describedBy, onNext, onFinish }: ForwardButtonProps) {
   if (!atEnd) {
     return (
-      <button className="btn" onClick={onNext} disabled={blocked} aria-describedby={describedBy}>
-        {label}
+      <button
+        className={next.quiet ? "btn ghost" : "btn"}
+        onClick={onNext}
+        disabled={blocked}
+        aria-describedby={describedBy}
+      >
+        {next.label}
       </button>
     );
   }
@@ -211,10 +216,11 @@ function StepSegments({ lesson, steps, pos }: { lesson: Lesson; steps: PlayerSte
   );
 }
 
-function nextLabel(step: PlayerStep, hasDraft: boolean) {
-  if (step.kind === "hook") return "Let's go";
-  if (step.kind === "interview") return hasDraft ? "Wrap up" : "Skip for now";
-  return "Next";
+/** What the main button says. Skipping the interview is quiet, so writing an answer looks like the way forward. */
+function nextAction(step: PlayerStep, hasDraft: boolean) {
+  if (step.kind === "hook") return { label: "Let's go", quiet: false };
+  if (step.kind !== "interview") return { label: "Next", quiet: false };
+  return hasDraft ? { label: "Wrap up", quiet: false } : { label: "Skip for now", quiet: true };
 }
 
 function stepHint(step: PlayerStep, blocked: boolean) {

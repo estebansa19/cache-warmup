@@ -69,11 +69,15 @@
   font-size: 0.95rem;
 }
 
+/* Dimmed by color, not opacity, so the text keeps its contrast. */
 .note-card.locked {
-  opacity: 0.55;
   box-shadow: none;
   background: transparent;
   border-style: dashed;
+}
+
+.note-card.locked h3 {
+  color: var(--ink-2);
 }
 
 @media (max-width: 820px) {

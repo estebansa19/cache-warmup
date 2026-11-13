@@ -263,5 +263,5 @@ function startScreen(due: number, total: number, nextDue: string | undefined, on
 function summaryText(session: Session) {
   if (session.mode === "practice") return "Practice runs don't move cards between tiers.";
   if (session.fuzzy) return "The fuzzy ones went back to disk and will show up tomorrow.";
-  return "Everything moved up a tier. Nice.";
+  return "All remembered. Each card moved up a tier, or stayed in L1. Nice.";
 }
