@@ -5,6 +5,7 @@ import { useProgress } from "../state/ProgressContext";
 import { TIERS, dueCardKeys, nextDueDay } from "../state/srs";
 import { prettyDay, today } from "../utils/dates";
 import { focusFirst } from "../utils/focus";
+import { useShortcuts } from "../utils/keys";
 import { shuffledIndexes } from "../utils/shuffle";
 import { plural, twoDigits } from "../utils/text";
 import "./Review.css";
@@ -49,6 +50,19 @@ export function Review() {
   function flip() {
     if (session) setSession({ ...session, flipped: true });
   }
+
+  // Space or Enter shows the answer; then 1 is Fuzzy and 2 is Got it.
+  useShortcuts(
+    (key, e) => {
+      if (!session?.flipped && (key === " " || key === "Enter")) {
+        e.preventDefault(); // Space would scroll the page
+        flip();
+      }
+
+      if (session?.flipped && (key === "1" || key === "2")) grade(key === "2");
+    },
+    session !== null && session.index < session.queue.length,
+  );
 
   function grade(remembered: boolean) {
     if (!session) return;
@@ -100,6 +114,7 @@ export function Review() {
         onGrade={grade}
       />
       <p className="muted">Say the answer out loud before you flip. It sticks better.</p>
+      <p className="muted key-hint">Keys: Space shows the answer, then 1 for Fuzzy, 2 for Got it.</p>
     </div>
   );
 }
@@ -248,5 +263,5 @@ function startScreen(due: number, total: number, nextDue: string | undefined, on
 function summaryText(session: Session) {
   if (session.mode === "practice") return "Practice runs don't move cards between tiers.";
   if (session.fuzzy) return "The fuzzy ones went back to disk and will show up tomorrow.";
-  return "Everything moved up a tier. Nice.";
+  return "All remembered. Each card moved up a tier, or stayed in L1. Nice.";
 }

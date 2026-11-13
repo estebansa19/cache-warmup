@@ -18,7 +18,15 @@ import { newCard, reviewCard, type Card } from "./srs";
 /** The shortest draft that earns interview XP when compared with the strong answer. */
 const MIN_WORDS_FOR_XP = 40;
 
-export type CheckResult = { kind: CheckKind; ok: boolean; pick?: number | boolean; seq?: number[] };
+export type CheckResult = {
+  kind: CheckKind;
+  /** Whether the first answer was right. It's the one that counts as a hit or a miss. */
+  ok: boolean;
+  pick?: number | boolean;
+  seq?: number[];
+  /** Set once a missed check was retried from the warm-up trace: whether that retry was right. */
+  rewarm?: boolean;
+};
 
 export type Feedback = {
   score: number;
@@ -75,6 +83,7 @@ export type Action =
   | { type: "open"; lessonId: string; lastStep: number }
   | { type: "move"; lessonId: string; pos: number }
   | { type: "answer"; key: string; result: CheckResult; today: Day }
+  | { type: "rewarm"; key: string; ok: boolean; today: Day }
   | { type: "finish"; lessonId: string; correct: number; total: number; cardKeys: string[]; today: Day }
   | { type: "review"; cardKey: string; remembered: boolean; today: Day }
   | { type: "draft"; key: string; text: string }
@@ -107,6 +116,19 @@ export function reducer(state: Progress, action: Action): Progress {
         ...state,
         checks: { ...state.checks, [action.key]: action.result },
         xp: state.xp + (action.result.ok ? XP.check : 0),
+        days: markDay(state.days, action.today),
+      };
+    }
+
+    case "rewarm": {
+      // A missed check gets one retry. The miss stays on record; a right retry earns part of the XP.
+      const check = state.checks[action.key];
+      if (!check || check.ok || check.rewarm !== undefined) return state;
+
+      return {
+        ...state,
+        checks: { ...state.checks, [action.key]: { ...check, rewarm: action.ok } },
+        xp: state.xp + (action.ok ? XP.rewarm : 0),
         days: markDay(state.days, action.today),
       };
     }

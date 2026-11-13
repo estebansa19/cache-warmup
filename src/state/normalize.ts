@@ -33,6 +33,7 @@ const checkSchema = z.object({
   ok: z.boolean(),
   pick: z.optional(z.union([count, z.boolean()])),
   seq: z.optional(z.array(count)),
+  rewarm: z.optional(z.boolean()),
 });
 
 // A broken field is dropped and the rest of the entry kept.

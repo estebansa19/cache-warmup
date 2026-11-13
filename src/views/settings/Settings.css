@@ -31,6 +31,14 @@
   gap: 12px;
 }
 
+.kept-copy {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--hl-strong);
+  border-radius: 10px;
+}
+
 .ai-state {
   display: flex;
   align-items: center;
@@ -56,6 +64,10 @@
   font-weight: 700;
   margin-bottom: 8px;
   padding: 0;
+}
+
+.theme-picker {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .tool-option {

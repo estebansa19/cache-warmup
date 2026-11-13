@@ -39,6 +39,20 @@ export type AIStatus = z.infer<typeof statusSchema>;
 /** What the interviewer grades. The server turns it into the prompt. */
 export type FeedbackRequest = { question: string; rubric: string[] | null; answer: string; profile: string };
 
+/** Host names the AI server answers to. It refuses any other (isLoopbackHost in server/options.mjs). */
+const SERVER_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+
+/**
+ * Where the AI server is: the address set in Settings (without trailing slashes, so paths can be
+ * appended), or "" for this page's own address. Null when neither can answer, like on a static
+ * host with no address set, so the app doesn't ask.
+ */
+export function serverBase(serverUrl: string, hostname: string): string | null {
+  const url = serverUrl.trim().replace(/\/+$/, "");
+  if (url) return url;
+  return SERVER_HOSTS.includes(hostname) ? "" : null;
+}
+
 export class AIError extends Error {
   constructor(
     public code: string,

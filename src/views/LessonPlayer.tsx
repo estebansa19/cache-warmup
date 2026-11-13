@@ -1,19 +1,19 @@
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InterviewRep } from "../components/InterviewRep";
+import { Check } from "../components/steps/Check";
 import { HookStep } from "../components/steps/HookStep";
-import { MythStep } from "../components/steps/MythStep";
-import { OrderStep } from "../components/steps/OrderStep";
-import { QuizStep } from "../components/steps/QuizStep";
 import { ReadStep } from "../components/steps/ReadStep";
 import { RecapStep } from "../components/steps/RecapStep";
+import type { JustFinished } from "../components/WarmupTrace";
 import { isCheck, playerSteps, type Lesson, type PlayerStep } from "../content/types";
 import { hrefFor } from "../router";
 import { XP } from "../state/levels";
 import { useProgress } from "../state/ProgressContext";
 import type { CheckResult } from "../state/progress";
-import { checkKey, resultFor } from "../state/selectors";
+import { cardKey, checkKey, lessonScore, resultFor, traceState } from "../state/selectors";
 import { today } from "../utils/dates";
 import { focusFirst } from "../utils/focus";
+import { useShortcuts } from "../utils/keys";
 import "./LessonPlayer.css";
 
 export function LessonPlayer({ lesson }: { lesson: Lesson }) {
@@ -25,8 +25,11 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
   const result = isCheck(step) ? resultFor(lesson, step, progress) : undefined;
   const blocked = isCheck(step) && !result;
   const hint = stepHint(step, blocked);
+  const done = Boolean(progress.done[lesson.id]);
+  const [justFinished, setJustFinished] = useState<JustFinished | null>(null);
   const sheet = useRef<HTMLElement>(null);
   const shownPos = useRef(pos);
+  const wasDone = useRef(done);
 
   // Remember this lesson for "continue" (and restart it if you finished it and left it on the last step).
   useEffect(() => {
@@ -41,22 +44,21 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
     focusFirst(sheet.current, "h2");
   }, [pos]);
 
-  // ← and → move between steps, but not while typing or with a modifier (Alt+← is "back" in browsers).
-  const onKey = useEffectEvent((e: KeyboardEvent) => {
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-
-    const target = e.target instanceof HTMLElement ? e.target : null;
-    if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
-
-    if (e.key === "ArrowRight" && !blocked && pos < last) go(pos + 1);
-    if (e.key === "ArrowLeft" && pos > 0) go(pos - 1);
-  });
-
+  // Finishing replaces the button you pressed: take focus (and the view) to what it produced.
   useEffect(() => {
-    const listener = (e: KeyboardEvent) => onKey(e);
-    window.addEventListener("keydown", listener);
-    return () => window.removeEventListener("keydown", listener);
-  }, []);
+    if (done && !wasDone.current) {
+      focusFirst(sheet.current, "h2");
+      window.scrollTo(0, 0);
+    }
+
+    wasDone.current = done;
+  }, [done]);
+
+  // ← and → move between steps, and Enter goes forward like Next. Finishing stays a deliberate click.
+  useShortcuts((key) => {
+    if ((key === "ArrowRight" || key === "Enter") && !blocked && pos < last) go(pos + 1);
+    if (key === "ArrowLeft" && pos > 0) go(pos - 1);
+  });
 
   function go(to: number) {
     dispatch({ type: "move", lessonId: lesson.id, pos: clamp(to, last) });
@@ -65,6 +67,20 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
 
   function answer(r: CheckResult) {
     if (isCheck(step)) dispatch({ type: "answer", key: checkKey(lesson, step), result: r, today: today() });
+  }
+
+  function finish() {
+    const score = lessonScore(lesson, progress);
+
+    setJustFinished({ xpBefore: progress.xp });
+    dispatch({
+      type: "finish",
+      lessonId: lesson.id,
+      correct: score.correct,
+      total: score.total,
+      cardKeys: lesson.cards.map((card) => cardKey(lesson, card)),
+      today: today(),
+    });
   }
 
   return (
@@ -82,7 +98,7 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
 
       {/* key: each step starts with fresh component state */}
       <article className="sheet" ref={sheet} key={pos}>
-        {renderStep(step, { lesson, result, answer })}
+        {renderStep(step, { lesson, result, answer, justFinished })}
       </article>
 
       <div className="player-nav">
@@ -92,22 +108,57 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
         <span className="player-hint" id="player-hint">
           {hint}
         </span>
-        {pos === last ? (
-          <a className="btn ghost" href={hrefFor({ view: "home" })}>
-            Done
-          </a>
-        ) : (
-          <button
-            className="btn"
-            onClick={() => go(pos + 1)}
-            disabled={blocked}
-            aria-describedby={hint ? "player-hint" : undefined}
-          >
-            {nextLabel(step, Boolean(progress.iv[lesson.id]?.draft))}
-          </button>
-        )}
+        <ForwardButton
+          atEnd={pos === last}
+          done={done}
+          blocked={blocked}
+          next={nextAction(step, Boolean(progress.iv[lesson.id]?.draft))}
+          describedBy={hint ? "player-hint" : undefined}
+          onNext={() => go(pos + 1)}
+          onFinish={finish}
+        />
       </div>
     </div>
+  );
+}
+
+type ForwardButtonProps = {
+  atEnd: boolean;
+  done: boolean;
+  blocked: boolean;
+  next: { label: string; quiet: boolean };
+  describedBy?: string;
+  onNext: () => void;
+  onFinish: () => void;
+};
+
+/** The one way forward: the next step, then finishing the lesson, then back to the path. */
+function ForwardButton({ atEnd, done, blocked, next, describedBy, onNext, onFinish }: ForwardButtonProps) {
+  if (!atEnd) {
+    return (
+      <button
+        className={next.quiet ? "btn ghost" : "btn"}
+        onClick={onNext}
+        disabled={blocked}
+        aria-describedby={describedBy}
+      >
+        {next.label}
+      </button>
+    );
+  }
+
+  if (!done) {
+    return (
+      <button className="btn" onClick={onFinish}>
+        Finish lesson · +{XP.lesson} XP
+      </button>
+    );
+  }
+
+  return (
+    <a className="btn" href={hrefFor({ view: "home" })}>
+      Back to the path
+    </a>
   );
 }
 
@@ -115,20 +166,19 @@ type StepContext = {
   lesson: Lesson;
   result: CheckResult | undefined;
   answer: (result: CheckResult) => void;
+  justFinished: JustFinished | null;
 };
 
-function renderStep(step: PlayerStep, { lesson, result, answer }: StepContext) {
+function renderStep(step: PlayerStep, { lesson, result, answer, justFinished }: StepContext) {
   switch (step.kind) {
     case "hook":
       return <HookStep lesson={lesson} />;
     case "read":
       return <ReadStep step={step} />;
     case "quiz":
-      return <QuizStep step={step} seed={checkKey(lesson, step)} result={result} onAnswer={answer} />;
     case "myth":
-      return <MythStep step={step} result={result} onAnswer={answer} />;
     case "order":
-      return <OrderStep step={step} seed={checkKey(lesson, step)} result={result} onAnswer={answer} />;
+      return <Check step={step} seed={checkKey(lesson, step)} result={result} onAnswer={answer} />;
     case "interview":
       return (
         <>
@@ -140,7 +190,7 @@ function renderStep(step: PlayerStep, { lesson, result, answer }: StepContext) {
         </>
       );
     case "recap":
-      return <RecapStep lesson={lesson} />;
+      return <RecapStep lesson={lesson} justFinished={justFinished} />;
   }
 }
 
@@ -153,7 +203,7 @@ function StepSegments({ lesson, steps, pos }: { lesson: Lesson; steps: PlayerSte
     if (i === pos) return "current";
 
     const result = isCheck(step) ? resultFor(lesson, step, progress) : undefined;
-    if (result) return result.ok ? "ok" : "miss";
+    if (result) return traceState(result);
     return i < pos || done ? "seen" : "";
   }
 
@@ -166,10 +216,11 @@ function StepSegments({ lesson, steps, pos }: { lesson: Lesson; steps: PlayerSte
   );
 }
 
-function nextLabel(step: PlayerStep, hasDraft: boolean) {
-  if (step.kind === "hook") return "Let's go";
-  if (step.kind === "interview") return hasDraft ? "Wrap up" : "Skip for now";
-  return "Next";
+/** What the main button says. Skipping the interview is quiet, so writing an answer looks like the way forward. */
+function nextAction(step: PlayerStep, hasDraft: boolean) {
+  if (step.kind === "hook") return { label: "Let's go", quiet: false };
+  if (step.kind !== "interview") return { label: "Next", quiet: false };
+  return hasDraft ? { label: "Wrap up", quiet: false } : { label: "Skip for now", quiet: true };
 }
 
 function stepHint(step: PlayerStep, blocked: boolean) {

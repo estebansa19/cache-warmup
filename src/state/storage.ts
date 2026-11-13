@@ -10,12 +10,49 @@ import { emptyProgress, type Progress } from "./progress";
 /** Unchanged since version 1, so existing progress is found and upgraded in place. */
 export const STORAGE_KEY = "cache-warmup:v1";
 
-/** Parses the stored (or another tab's) JSON. */
+/** Where saved progress goes when this version can't read it, so the next save doesn't destroy it. */
+export const UNREADABLE_KEY = "cache-warmup:unreadable";
+
+/**
+ * Parses the stored (or another tab's) JSON. Progress this version can't read (damaged, or
+ * saved by a newer version) is set aside under UNREADABLE_KEY, and you start fresh.
+ */
 export function parseStored(json: string | null, legacy: LegacyKeys): Progress {
+  const progress = readProgress(json, legacy);
+  if (json !== null && !progress) keepUnreadable(json);
+  return progress ?? emptyProgress();
+}
+
+function readProgress(json: string | null, legacy: LegacyKeys): Progress | null {
   try {
-    return normalize(JSON.parse(json ?? "null"), legacy) ?? emptyProgress();
+    return normalize(JSON.parse(json ?? "null"), legacy);
   } catch {
-    return emptyProgress();
+    return null;
+  }
+}
+
+function keepUnreadable(json: string) {
+  try {
+    localStorage.setItem(UNREADABLE_KEY, json);
+  } catch {
+    /* storage full or blocked */
+  }
+}
+
+/** The saved progress this version couldn't read, exactly as it was stored. Null if there's none. */
+export function readUnreadable(): string | null {
+  try {
+    return localStorage.getItem(UNREADABLE_KEY);
+  } catch {
+    return null; // storage blocked
+  }
+}
+
+export function clearUnreadable() {
+  try {
+    localStorage.removeItem(UNREADABLE_KEY);
+  } catch {
+    /* storage blocked */
   }
 }
 
@@ -53,6 +90,6 @@ export function clearSavedProgress() {
 }
 
 /** The file name for an exported backup, like cache-warmup-progress-2026-10-16.json. */
-export function exportFileName() {
-  return `cache-warmup-progress-${today()}.json`;
+export function exportFileName(kind: "progress" | "progress-unreadable" = "progress") {
+  return `cache-warmup-${kind}-${today()}.json`;
 }

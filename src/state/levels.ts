@@ -1,6 +1,6 @@
 import { addDays, type Day } from "../utils/dates";
 
-export const XP = { check: 10, lesson: 30, interview: 25, card: 2 } as const;
+export const XP = { check: 10, rewarm: 5, lesson: 30, interview: 25, card: 2 } as const;
 
 export const LEVELS = [
   { xp: 0, name: "Intern" },

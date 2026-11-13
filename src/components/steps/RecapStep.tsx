@@ -1,74 +1,31 @@
 import type { Lesson } from "../../content/types";
-import { hrefFor } from "../../router";
-import { XP } from "../../state/levels";
 import { useProgress } from "../../state/ProgressContext";
-import { cardKey, lessonScore } from "../../state/selectors";
-import { prettyDay, today } from "../../utils/dates";
+import { WarmupTrace, type JustFinished } from "../WarmupTrace";
 
-export function RecapStep({ lesson }: { lesson: Lesson }) {
-  const { progress, dispatch } = useProgress();
-  const score = lessonScore(lesson, progress);
-  const done = progress.done[lesson.id];
-  const finishedOn = done ? prettyDay(done.at) : "";
-  const interviewDone = Boolean(progress.iv[lesson.id]?.xp);
+type Props = { lesson: Lesson; justFinished: JustFinished | null };
 
-  function finish() {
-    dispatch({
-      type: "finish",
-      lessonId: lesson.id,
-      correct: score.correct,
-      total: score.total,
-      cardKeys: lesson.cards.map((card) => cardKey(lesson, card)),
-      today: today(),
-    });
-  }
+/**
+ * The last step: the cheat sheet, and once the lesson is finished (the player's main button
+ * does that) its warm-up trace above it.
+ */
+export function RecapStep({ lesson, justFinished }: Props) {
+  const { progress } = useProgress();
+  const done = Boolean(progress.done[lesson.id]);
+  const title = `${lesson.title}, on one card`;
 
   return (
     <>
+      {done && <WarmupTrace lesson={lesson} justFinished={justFinished} />}
       <span className="eyebrow step-kind recap">
         <i />
         Cheat sheet
       </span>
-      <h2>{lesson.title}, on one card</h2>
+      {done ? <h3>{title}</h3> : <h2>{title}</h2>}
       <div className="cheat">{lesson.cheatSheet}</div>
-      <div className="recap-stats">
-        <div>
-          <b>
-            {score.correct}/{score.total}
-          </b>
-          <span>checks right</span>
-        </div>
-        <div>
-          <b>{interviewDone ? "✓" : "–"}</b>
-          <span>interview rep</span>
-        </div>
-        <div>
-          <b>{lesson.cards.length}</b>
-          <span>cards to warm</span>
-        </div>
-      </div>
-      {done ? (
-        <>
-          <div className="done-banner">
-            Finished {finishedOn === "today" ? "today" : `on ${finishedOn}`}. Its cards are in your review
-            deck.
-          </div>
-          <div className="row">
-            <a className="btn" href={hrefFor({ view: "home" })}>
-              Back to the path
-            </a>
-            <a className="btn ghost" href={hrefFor({ view: "notes" })}>
-              All cheat sheets
-            </a>
-          </div>
-        </>
-      ) : (
-        <div className="row">
-          <button className="btn" onClick={finish}>
-            Finish lesson · +{XP.lesson} XP
-          </button>
-          <span className="muted">Adds {lesson.cards.length} flashcards. First review is tomorrow.</span>
-        </div>
+      {!done && (
+        <p className="muted">
+          Finishing writes {lesson.cards.length} flashcards to Disk. The first review is tomorrow.
+        </p>
       )}
     </>
   );

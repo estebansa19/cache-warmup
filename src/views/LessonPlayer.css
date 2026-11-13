@@ -33,12 +33,18 @@
   background: var(--ink-3);
 }
 
-.segments i.ok {
+.segments i.hit {
   background: var(--good);
 }
 
-.segments i.miss {
+.segments i.miss,
+.segments i.missed-twice {
   background: var(--bad);
+}
+
+/* Missed, then got on the retry. */
+.segments i.rewarmed {
+  background: linear-gradient(90deg, var(--bad) 50%, var(--good) 50%);
 }
 
 .segments i.current {
@@ -60,6 +66,10 @@
 .sheet > h2:not(.eyebrow) {
   font-size: var(--step-3);
   font-weight: 700;
+}
+
+.sheet > h3 {
+  font-size: var(--step-2);
 }
 
 .player-nav {
@@ -229,7 +239,7 @@
   color: var(--bad);
 }
 
-.verdict:focus {
+.verdict:focus-visible {
   outline: 2px solid var(--cobalt);
   outline-offset: 2px;
 }
@@ -354,43 +364,14 @@
   color: var(--bad);
 }
 
-/* recap */
-.recap-stats {
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-}
-
-.recap-stats b {
-  display: block;
-  font-family: var(--f-display);
-  font-size: var(--step-3);
-  font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.recap-stats span {
-  font-size: var(--step--1);
-  color: var(--ink-3);
-}
-
-.done-banner {
-  padding: 14px 16px;
-  background: var(--good-bg);
-  border-radius: 10px;
-  color: var(--good);
-  font-weight: 700;
-}
-
-/* On phones the hint gets its own line under the buttons. */
-@media (max-width: 520px) {
+/* Phones: Back and Next stay within reach at the bottom of the screen, however long the step is. */
+@media (max-width: 720px) {
   .player-nav {
-    flex-wrap: wrap;
-  }
-
-  .player-hint {
-    order: 3;
-    flex-basis: 100%;
+    position: sticky;
+    bottom: 0;
+    margin-inline: -16px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--sheet);
+    border-top: 1px solid var(--rule);
   }
 }

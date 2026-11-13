@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { parseLooseJson } from "../src/ai/client";
+import { parseLooseJson, serverBase } from "../src/ai/client";
 import { toFeedback } from "../src/ai/feedback";
-import { feedbackPrompt, readFeedbackRequest } from "../server/prompt.mjs";
+import { LIMITS, feedbackPrompt, readFeedbackRequest } from "../server/prompt.mjs";
 
 describe("parseLooseJson", () => {
   test("plain JSON", () => expect(parseLooseJson('{"score": 3}')).toEqual({ score: 3 }));
@@ -15,6 +15,20 @@ describe("parseLooseJson", () => {
     expect(parseLooseJson('\x1b[32m{"score": 5}\x1b[0m')).toEqual({ score: 5 }));
 
   test("garbage gives null", () => expect(parseLooseJson("no json here")).toBeNull());
+});
+
+describe("serverBase", () => {
+  test("the app's own address, when it's served from this machine", () => {
+    expect(serverBase("", "localhost")).toBe("");
+    expect(serverBase("", "127.0.0.1")).toBe("");
+    expect(serverBase("", "[::1]")).toBe("");
+  });
+
+  test("no server on a static host or another machine, unless Settings names one", () => {
+    expect(serverBase("", "someone.github.io")).toBeNull();
+    expect(serverBase("", "192.168.1.20")).toBeNull();
+    expect(serverBase(" http://localhost:4317/ ", "someone.github.io")).toBe("http://localhost:4317");
+  });
 });
 
 describe("toFeedback", () => {
@@ -50,6 +64,15 @@ describe("feedbackPrompt (built on the server)", () => {
     expect(prompt).toContain("- hash map\n- linked list");
     expect(prompt).toContain("I'd use a map");
     expect(prompt).toContain("About the candidate: Staff engineer.");
+  });
+
+  test("grades the whole answer and profile, up to the request limits", () => {
+    const answer = "a".repeat(LIMITS.answer - 1) + "Z";
+    const profile = "p".repeat(LIMITS.profile - 1) + "Q";
+    const prompt = feedbackPrompt(readFeedbackRequest({ question: "Q", rubric: null, answer, profile }));
+
+    expect(prompt).toContain(answer);
+    expect(prompt).toContain(profile);
   });
 
   test("falls back to a generic rubric and profile", () => {

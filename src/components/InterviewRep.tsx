@@ -23,7 +23,10 @@ const ERRORS: Record<string, string> = {
   refused: "The model declined to grade that one. Try rephrasing your answer.",
 };
 
-/** One interview question: write an answer, get AI feedback, or compare with a strong answer. */
+/**
+ * One interview question: write an answer, get AI feedback, or compare it yourself, with the
+ * lesson's strong answer or, for questions that have none, a self-check.
+ */
 export function InterviewRep({ id, question }: { id: string; question: InterviewQuestion }) {
   const { progress, dispatch } = useProgress();
   const ai = useAI();
@@ -36,7 +39,7 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
   const { busy } = feedback;
   const state = progress.iv[id] ?? {};
   const draft = state.draft ?? "";
-  const hasStrongAnswer = Boolean(question.answer || question.rubric?.length);
+  const compare = comparison(Boolean(question.answer || question.rubric?.length));
   const checking = ai.phase === "checking";
   const aiOn = Boolean(ai.status?.enabled);
   const aiOff = !checking && !aiOn;
@@ -93,17 +96,15 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
             Looking for AI feedback…
           </button>
         )}
-        {hasStrongAnswer && (
-          <button className="btn ghost" onClick={toggleAnswer} aria-expanded={showAnswer}>
-            {showAnswer ? "Hide the strong answer" : "Compare with a strong answer"}
-          </button>
-        )}
+        <button className="btn ghost" onClick={toggleAnswer} aria-expanded={showAnswer}>
+          {showAnswer ? compare.hide : compare.show}
+        </button>
         <span className="word-count">{words(draft)} words</span>
       </div>
 
       {aiOff && (
         <p className="muted">
-          AI feedback is off, so compare with the strong answer for now.{" "}
+          AI feedback is off, so {compare.advice} for now.{" "}
           <a href={hrefFor({ view: "settings" })}>Turn on AI feedback</a> (about a minute).
         </p>
       )}
@@ -132,8 +133,7 @@ export function InterviewRep({ id, question }: { id: string; question: Interview
         {!busy && state.fb && <FeedbackCard feedback={state.fb} day={state.fbAt} />}
       </div>
 
-      {!hasStrongAnswer && aiOff && <SelfCheck />}
-      {showAnswer && <StrongAnswer question={question} />}
+      {showAnswer && (compare.strongAnswer ? <StrongAnswer question={question} /> : <SelfCheck />)}
     </div>
   );
 }
@@ -162,7 +162,7 @@ function StrongAnswer({ question }: { question: InterviewQuestion }) {
   );
 }
 
-/** Generic questions to grade yourself with, when there's no strong answer and no AI. */
+/** Generic questions to grade yourself with, for a question that has no strong answer. */
 function SelfCheck() {
   return (
     <div className="strong-answer">
@@ -215,6 +215,25 @@ function useFeedbackRequest(id: string) {
   }
 
   return { busy, error, done, ask, stop: () => abort.current?.abort() };
+}
+
+/** The words for comparing your answer yourself: against a strong answer, or with the self-check. */
+function comparison(strongAnswer: boolean) {
+  if (strongAnswer) {
+    return {
+      strongAnswer,
+      show: "Compare with a strong answer",
+      hide: "Hide the strong answer",
+      advice: "compare with the strong answer",
+    };
+  }
+
+  return {
+    strongAnswer,
+    show: "Check it yourself",
+    hide: "Hide the self-check",
+    advice: "use the self-check",
+  };
 }
 
 /** What the screen reader hears about the request. */

@@ -1,9 +1,11 @@
+import { LevelBar } from "../components/LevelBar";
+import { TemperaturePill } from "../components/TemperaturePill";
 import { isKnownCard, lessons } from "../content/lessons";
 import { TRACKS, playerSteps, type Lesson } from "../content/types";
 import { hrefFor } from "../router";
-import { levelInfo, streak } from "../state/levels";
+import { streak } from "../state/levels";
 import { useProgress } from "../state/ProgressContext";
-import { lessonScore, lessonStatus, nextLesson } from "../state/selectors";
+import { lessonStatus, nextLesson } from "../state/selectors";
 import { TIERS, dueCardKeys, nextDueDay, tierCounts } from "../state/srs";
 import type { Progress } from "../state/progress";
 import { prettyDay, today, type Day } from "../utils/dates";
@@ -15,23 +17,22 @@ export function Home() {
 
   return (
     <>
+      {/* What to do next comes first, so on a phone it's on screen without scrolling past the stats. */}
       <section className="hero">
-        <div>
-          <p className="eyebrow">Fundamentals refresh · {lessons.length} lessons · a few at a time</p>
-          <h1>
-            Cache <span>Warmup</span>
-          </h1>
-          <p className="lede">
-            The fundamentals are still in there, just sitting in cold storage. Short lessons, quick checks,
-            and interview reps to bring them back up to L1.
-          </p>
+        <div className="hero-main">
+          <div>
+            <p className="eyebrow">Fundamentals refresh · {lessons.length} lessons · a few at a time</p>
+            <h1>
+              Cache <span>Warmup</span>
+            </h1>
+            <p className="lede">
+              The fundamentals are still in there, just sitting in cold storage. Short lessons, quick checks,
+              and interview reps to bring them back up to L1.
+            </p>
+          </div>
+          <ContinueCard progress={progress} />
         </div>
         <Stats progress={progress} />
-      </section>
-
-      <section className="today">
-        <ContinueCard progress={progress} />
-        <ReviewCard progress={progress} />
       </section>
 
       {TRACKS.map((track) => (
@@ -54,33 +55,19 @@ export function Home() {
 }
 
 function Stats({ progress }: { progress: Progress }) {
-  const level = levelInfo(progress.xp);
   const reviews = progress.hits + progress.misses;
   const hitRate = reviews ? `${Math.round((progress.hits / reviews) * 100)}%` : "–";
 
   return (
     <div className="panel stats">
-      <div className="level-row">
-        <span className="level-name">{level.name}</span>
-        <span className="mono-note">
-          {progress.xp} XP
-          {level.next ? ` · ${level.next.xp - progress.xp} to ${level.next.name}` : " · max level"}
-        </span>
-      </div>
-      <div
-        className="xp-bar"
-        role="progressbar"
-        aria-label="Progress to next level"
-        aria-valuenow={Math.round(level.percent)}
-      >
-        <i style={{ width: `${level.percent}%` }} />
-      </div>
+      <LevelBar xp={progress.xp} />
       <div className="kpis">
         <Kpi value={`${Object.keys(progress.done).length}/${lessons.length}`} label="lessons" />
         <Kpi value={String(streak(progress.days, today()))} label="day streak" />
         <Kpi value={hitRate} label="recall hit rate" />
       </div>
       <MemoryHierarchy progress={progress} />
+      <ReviewRow progress={progress} />
     </div>
   );
 }
@@ -168,23 +155,23 @@ function AllDoneCard() {
   );
 }
 
-function ReviewCard({ progress }: { progress: Progress }) {
+/** The review deck, under the hierarchy it fills: cards going cold, when the next ones come, or none yet. */
+function ReviewRow({ progress }: { progress: Progress }) {
   const now = today();
   const due = dueCardKeys(progress.cards, now, isKnownCard).length;
   const total = Object.keys(progress.cards).length;
   const { title, text } = reviewCopy(due, total, nextDueDay(progress.cards), now);
 
   return (
-    <div className="panel today-card">
-      <p className="eyebrow">Review</p>
-      <h2>{title}</h2>
-      <p>{text}</p>
+    <div className="review-row">
+      <div>
+        <h2>{title}</h2>
+        <p>{text}</p>
+      </div>
       {total > 0 && (
-        <div className="row actions">
-          <a className={due ? "btn" : "btn ghost"} href={hrefFor({ view: "review" })}>
-            {due ? `Review ${due}` : "Practice anyway"}
-          </a>
-        </div>
+        <a className={due ? "btn small" : "btn ghost small"} href={hrefFor({ view: "review" })}>
+          {due ? `Review ${due}` : "Practice anyway"}
+        </a>
       )}
     </div>
   );
@@ -203,18 +190,11 @@ function LessonRow({ lesson, progress }: { lesson: Lesson; progress: Progress })
   );
 }
 
-/** "done · 4/5", the current step, or the time it takes. */
+/** A finished lesson's temperature, the current step, or the time it takes. */
 function LessonPill({ lesson, progress }: { lesson: Lesson; progress: Progress }) {
   switch (lessonStatus(lesson, progress)) {
-    case "done": {
-      const score = lessonScore(lesson, progress);
-
-      return (
-        <span className="pill done">
-          done · {score.correct}/{score.total}
-        </span>
-      );
-    }
+    case "done":
+      return <TemperaturePill lesson={lesson} />;
     case "in-progress":
       return (
         <span className="pill progress">
@@ -231,7 +211,7 @@ function continueEyebrow(inProgress: boolean, anyDone: boolean) {
   return anyDone ? "Up next" : "Start here";
 }
 
-/** The review card's heading and line: cards going cold, when the next ones come, or none yet. */
+/** The review row's heading and line. */
 function reviewCopy(due: number, total: number, nextDue: Day | undefined, now: Day) {
   if (due) {
     return {

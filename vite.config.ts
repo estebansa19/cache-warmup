@@ -4,6 +4,7 @@ import mdx from "@mdx-js/rollup";
 import remarkGfm from "remark-gfm";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkMdxFrontmatter from "remark-mdx-frontmatter";
+import rehypeHighlight from "rehype-highlight";
 import { createBridge } from "./server/bridge.mjs";
 import { bridgeOptions } from "./server/options.mjs";
 import { checkLesson } from "./src/content/check-lesson.ts";
@@ -36,7 +37,11 @@ export default defineConfig({
       enforce: "pre",
       // Keep MDX provider-free and wrapper-free (no providerImportSource, no layout):
       // parse-lesson.ts reads the elements MDX returns directly.
-      ...mdx({ remarkPlugins: [remarkGfm, remarkFrontmatter, checkLesson, remarkMdxFrontmatter] }),
+      // Code blocks are highlighted here, at build time, so the app ships no highlighter.
+      ...mdx({
+        remarkPlugins: [remarkGfm, remarkFrontmatter, checkLesson, remarkMdxFrontmatter],
+        rehypePlugins: [rehypeHighlight],
+      }),
     },
     react({ include: /\.(mdx|tsx?)$/ }),
     aiBridge(),

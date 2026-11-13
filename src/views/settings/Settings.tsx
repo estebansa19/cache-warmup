@@ -1,4 +1,5 @@
 import { AboutYou } from "./AboutYou";
+import { Appearance } from "./Appearance";
 import { AISettings } from "./AISettings";
 import { ProgressSettings } from "./ProgressSettings";
 import "./Settings.css";
@@ -14,6 +15,7 @@ export function Settings() {
       <div className="settings">
         <AISettings />
         <AboutYou />
+        <Appearance />
         <ProgressSettings />
       </div>
     </>

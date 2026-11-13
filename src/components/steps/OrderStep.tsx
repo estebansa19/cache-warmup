@@ -4,12 +4,18 @@ import type { CheckResult } from "../../state/progress";
 import { scrambledIndexes } from "../../utils/shuffle";
 import { Verdict } from "./Verdict";
 
-type Props = { step: Step; seed: string; result?: CheckResult; onAnswer: (r: CheckResult) => void };
+type Props = {
+  step: Step;
+  seed: string;
+  result?: CheckResult;
+  onAnswer: (r: CheckResult) => void;
+  xp?: number;
+};
 
 /** Where focus goes after a tap removes the button you pressed: the button now in its place. */
 type FocusNext = { list: "pool" | "sequence"; index: number } | null;
 
-export function OrderStep({ step, seed, result, onAnswer }: Props) {
+export function OrderStep({ step, seed, result, onAnswer, xp }: Props) {
   const [answeredNow, setAnsweredNow] = useState(false);
 
   function check(sequence: number[]) {
@@ -27,7 +33,7 @@ export function OrderStep({ step, seed, result, onAnswer }: Props) {
       {result ? (
         <>
           <OrderResult step={step} result={result} />
-          <Verdict ok={result.ok} why={step.why} focus={answeredNow} />
+          <Verdict ok={result.ok} why={step.why} focus={answeredNow} xp={xp} />
         </>
       ) : (
         <OrderPuzzle step={step} seed={seed} onCheck={check} />

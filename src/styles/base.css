@@ -244,6 +244,29 @@ mark {
   border-color: transparent;
 }
 
+/* A finished lesson's temperature (see lessonTemperature in selectors.ts). */
+.pill.hot {
+  background: var(--hl);
+  color: var(--ink);
+  border-color: transparent;
+}
+
+.pill.warm {
+  background: var(--good-bg);
+  color: var(--good);
+  border-color: transparent;
+}
+
+.pill.cooling {
+  background: var(--cobalt-soft);
+  color: var(--cobalt);
+  border-color: transparent;
+}
+
+.pill.cold {
+  border-style: dashed;
+}
+
 .dot {
   width: 8px;
   height: 8px;
@@ -352,6 +375,29 @@ mark {
   font-size: inherit;
 }
 
+/* Code highlighting: rehype-highlight adds these classes when the lessons are built. */
+.hljs-keyword {
+  color: var(--cobalt);
+}
+
+.hljs-string {
+  color: var(--good);
+}
+
+.hljs-comment {
+  color: var(--ink-3);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-literal {
+  color: var(--code-number);
+}
+
+.hljs-title {
+  font-weight: 600;
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--rule);
@@ -433,6 +479,14 @@ textarea.ruled {
 
 textarea.ruled:focus {
   border-color: var(--ink);
+}
+
+/* Things that appear because of what you just did come up into place. Each rule's own styles are where it ends. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

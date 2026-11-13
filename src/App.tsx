@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AIProvider } from "./ai/AIContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Nav } from "./components/Nav";
@@ -6,6 +6,7 @@ import { lessonById } from "./content/lessons";
 import type { Lesson } from "./content/types";
 import { useRoute, type Route } from "./router";
 import { ProgressProvider } from "./state/ProgressContext";
+import { readUnreadable } from "./state/storage";
 import { focusFirst } from "./utils/focus";
 import { CheatSheets } from "./views/CheatSheets";
 import { Gym } from "./views/Gym";
@@ -38,6 +39,7 @@ function Shell() {
   const route = useRoute();
   const main = useRef<HTMLElement>(null);
   const firstRender = useRef(true);
+  const [hadUnreadable] = useState(() => readUnreadable() !== null);
   const lesson = route.view === "lesson" ? lessonById.get(route.id) : undefined;
   const title = route.view === "lesson" ? (lesson?.title ?? "") : TITLES[route.view];
 
@@ -56,7 +58,9 @@ function Shell() {
         {renderView(route, lesson)}
       </main>
       <footer className="footer">
-        Progress is saved in this browser. Settings → Export moves it to another one.
+        {hadUnreadable
+          ? "This browser had saved progress this version couldn't read. Settings has a copy of it."
+          : "Progress is saved in this browser. Settings → Export moves it to another one."}
       </footer>
     </>
   );

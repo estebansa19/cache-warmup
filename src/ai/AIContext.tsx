@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Feedback } from "../state/progress";
 import {
+  AIError,
   getStatus,
   requestFeedback,
   savePreference,
+  serverBase,
   type AIStatus,
   type FeedbackRequest,
   type Preference,
@@ -31,12 +33,19 @@ export function AIProvider({ children }: { children: ReactNode }) {
   const [serverUrl, setUrl] = useState(readServerUrl);
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [phase, setPhase] = useState<Phase>("checking");
-  const base = toBase(serverUrl);
+  const base = serverBase(serverUrl, window.location.hostname);
   // Only the newest status request may update the screen; slower, older replies are dropped.
   const latest = useRef(0);
 
   const refresh = useCallback(async () => {
     const request = ++latest.current;
+
+    if (base === null) {
+      setStatus(null);
+      setPhase("unreachable");
+      return;
+    }
+
     setPhase("checking");
 
     try {
@@ -64,17 +73,17 @@ export function AIProvider({ children }: { children: ReactNode }) {
     setServerUrl(url) {
       saveServerUrl(url);
       // A new address refreshes through the effect above; the same one needs asking directly.
-      if (toBase(url) === base) refresh();
+      if (serverBase(url, window.location.hostname) === base) refresh();
       setUrl(url);
     },
     refresh,
     async choose(preference) {
-      const next = await savePreference(base, preference);
+      const next = await savePreference(reachable(base), preference);
       latest.current++; // this is newer than any status request still in flight
       setStatus(next);
       setPhase("ready");
     },
-    ask: (request, signal) => requestFeedback(base, request, signal),
+    ask: async (request, signal) => requestFeedback(reachable(base), request, signal),
   };
 
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>;
@@ -102,7 +111,8 @@ function saveServerUrl(url: string) {
   }
 }
 
-/** The address without trailing slashes, so paths can be appended. */
-function toBase(url: string) {
-  return url.trim().replace(/\/+$/, "");
+/** The server's address, or the error the app shows when there's no server to reach. */
+function reachable(base: string | null): string {
+  if (base === null) throw new AIError("unreachable");
+  return base;
 }

@@ -63,7 +63,8 @@ function isShortText(item) {
 
 /** @param {FeedbackRequest} request */
 export function feedbackPrompt({ question, rubric, answer, profile }) {
-  const about = profile.trim() ? profile.trim().slice(0, 600) : "a software engineer (seniority unknown)";
+  // Lengths were checked against LIMITS already, so everything you wrote is graded.
+  const about = profile.trim() || "a software engineer (seniority unknown)";
   const criteria = rubric?.length
     ? "A strong answer usually covers:\n- " + rubric.join("\n- ")
     : "Judge it as a senior-level interviewer would: correctness, depth, a concrete example, trade-offs, and clarity.";
@@ -79,7 +80,7 @@ ${criteria}
 
 Candidate's answer:
 """
-${answer.slice(0, 8000)}
+${answer}
 """
 
 Evaluate this specific answer and refer to what they actually wrote. Be direct and encouraging, in plain, casual language. Keep each list item under 25 words. Max 4 strengths and 4 gaps.

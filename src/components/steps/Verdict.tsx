@@ -1,13 +1,14 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { XP } from "../../state/levels";
 
-type Props = { ok: boolean; why: ReactNode; lead?: ReactNode; focus?: boolean };
+type Props = { ok: boolean; why: ReactNode; lead?: ReactNode; focus?: boolean; xp?: number };
 
 /**
  * The "Correct / Not quite" box shown after a quick check, with the explanation.
- * `focus` moves focus here, for when it appears because you just answered.
+ * `focus` moves focus here, for when it appears because you just answered. `xp` is what a
+ * right answer earned (less on a retry).
  */
-export function Verdict({ ok, why, lead, focus }: Props) {
+export function Verdict({ ok, why, lead, focus, xp = XP.check }: Props) {
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -16,7 +17,7 @@ export function Verdict({ ok, why, lead, focus }: Props) {
 
   return (
     <div className={`verdict ${ok ? "ok" : "no"}`} ref={box} tabIndex={-1}>
-      <strong>{ok ? `Correct · +${XP.check} XP` : "Not quite"}</strong>
+      <strong>{ok ? `Correct · +${xp} XP` : "Not quite"}</strong>
       {lead}
       <div className="prose compact">{why}</div>
     </div>

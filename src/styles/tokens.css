@@ -1,28 +1,35 @@
 /*
  * Design tokens. A study notebook on graph paper: cool paper, ink, and a
  * highlighter yellow for the things worth remembering. Every color used in
- * the app comes from here, in both themes.
+ * the app comes from here, as light-dark(light, dark): the theme follows the
+ * device unless Settings → Appearance picks one (see theme.ts).
  */
 
 :root {
-  --paper: #e7ebef;
-  --grid: rgba(36, 72, 214, 0.055);
-  --sheet: #fcfdfd;
-  --ink: #131a22;
-  --ink-2: #4a5866;
-  --ink-3: #5b6774;
-  --rule: #d2d9e0;
-  --hl: #ffe14a;
-  --hl-strong: #e9be00;
-  --cobalt: #2448d6;
-  --cobalt-soft: rgba(36, 72, 214, 0.09);
-  --good: #0e7546;
-  --good-bg: #e2f3e9;
-  --bad: #b3261e;
-  --bad-bg: #fbe8e6;
-  --margin: #e25a5a;
-  --code-bg: #eef1f5;
-  --shadow: 0 1px 0 rgba(19, 26, 34, 0.04), 0 10px 28px -14px rgba(19, 26, 34, 0.22);
+  color-scheme: light dark;
+
+  --paper: light-dark(#e7ebef, #0d1217);
+  --grid: light-dark(rgba(36, 72, 214, 0.055), rgba(124, 155, 255, 0.07));
+  --sheet: light-dark(#fcfdfd, #151c23);
+  --ink: light-dark(#131a22, #e6ebef);
+  --ink-2: light-dark(#4a5866, #a4b1bd);
+  --ink-3: light-dark(#5b6774, #7f8d99);
+  --rule: light-dark(#d2d9e0, #26303a);
+  /* Solid amber in the dark: a see-through yellow over the blue-gray sheet reads as olive. */
+  --hl: light-dark(#ffe14a, #806000);
+  --hl-strong: light-dark(#e9be00, #f2cc3a);
+  --cobalt: light-dark(#2448d6, #86a2ff);
+  --cobalt-soft: light-dark(rgba(36, 72, 214, 0.09), rgba(134, 162, 255, 0.13));
+  --good: light-dark(#0e7546, #57d08f);
+  --good-bg: light-dark(#e2f3e9, rgba(87, 208, 143, 0.12));
+  --bad: light-dark(#b3261e, #ff8f85);
+  --bad-bg: light-dark(#fbe8e6, rgba(255, 143, 133, 0.12));
+  --margin: light-dark(#e25a5a, #d86a6a);
+  --code-bg: light-dark(#eef1f5, #0f151b);
+  --code-number: light-dark(#a14a00, #f0a050);
+  --shadow:
+    0 1px 0 light-dark(rgba(19, 26, 34, 0.04), rgba(0, 0, 0, 0.3)),
+    0 10px 28px -14px light-dark(rgba(19, 26, 34, 0.22), rgba(0, 0, 0, 0.7));
 
   --f-display: "Bricolage Grotesque Variable", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --f-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -37,27 +44,10 @@
   --radius: 10px;
 }
 
-/* Dark theme, following the system setting. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0d1217;
-    --grid: rgba(124, 155, 255, 0.045);
-    --sheet: #151c23;
-    --ink: #e6ebef;
-    --ink-2: #a4b1bd;
-    --ink-3: #7f8d99;
-    --rule: #26303a;
-    --hl: rgba(255, 214, 60, 0.32);
-    --hl-strong: #f2cc3a;
-    --cobalt: #86a2ff;
-    --cobalt-soft: rgba(134, 162, 255, 0.13);
-    --good: #57d08f;
-    --good-bg: rgba(87, 208, 143, 0.12);
-    --bad: #ff8f85;
-    --bad-bg: rgba(255, 143, 133, 0.12);
-    --margin: #d86a6a;
-    --code-bg: #0f151b;
-    --shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 12px 30px -16px rgba(0, 0, 0, 0.7);
-    color-scheme: dark;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
