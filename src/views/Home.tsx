@@ -17,23 +17,22 @@ export function Home() {
 
   return (
     <>
+      {/* What to do next comes first, so on a phone it's on screen without scrolling past the stats. */}
       <section className="hero">
-        <div>
-          <p className="eyebrow">Fundamentals refresh · {lessons.length} lessons · a few at a time</p>
-          <h1>
-            Cache <span>Warmup</span>
-          </h1>
-          <p className="lede">
-            The fundamentals are still in there, just sitting in cold storage. Short lessons, quick checks,
-            and interview reps to bring them back up to L1.
-          </p>
+        <div className="hero-main">
+          <div>
+            <p className="eyebrow">Fundamentals refresh · {lessons.length} lessons · a few at a time</p>
+            <h1>
+              Cache <span>Warmup</span>
+            </h1>
+            <p className="lede">
+              The fundamentals are still in there, just sitting in cold storage. Short lessons, quick checks,
+              and interview reps to bring them back up to L1.
+            </p>
+          </div>
+          <ContinueCard progress={progress} />
         </div>
         <Stats progress={progress} />
-      </section>
-
-      <section className="today">
-        <ContinueCard progress={progress} />
-        <ReviewCard progress={progress} />
       </section>
 
       {TRACKS.map((track) => (
@@ -68,6 +67,7 @@ function Stats({ progress }: { progress: Progress }) {
         <Kpi value={hitRate} label="recall hit rate" />
       </div>
       <MemoryHierarchy progress={progress} />
+      <ReviewRow progress={progress} />
     </div>
   );
 }
@@ -155,23 +155,23 @@ function AllDoneCard() {
   );
 }
 
-function ReviewCard({ progress }: { progress: Progress }) {
+/** The review deck, under the hierarchy it fills: cards going cold, when the next ones come, or none yet. */
+function ReviewRow({ progress }: { progress: Progress }) {
   const now = today();
   const due = dueCardKeys(progress.cards, now, isKnownCard).length;
   const total = Object.keys(progress.cards).length;
   const { title, text } = reviewCopy(due, total, nextDueDay(progress.cards), now);
 
   return (
-    <div className="panel today-card">
-      <p className="eyebrow">Review</p>
-      <h2>{title}</h2>
-      <p>{text}</p>
+    <div className="review-row">
+      <div>
+        <h2>{title}</h2>
+        <p>{text}</p>
+      </div>
       {total > 0 && (
-        <div className="row actions">
-          <a className={due ? "btn" : "btn ghost"} href={hrefFor({ view: "review" })}>
-            {due ? `Review ${due}` : "Practice anyway"}
-          </a>
-        </div>
+        <a className={due ? "btn small" : "btn ghost small"} href={hrefFor({ view: "review" })}>
+          {due ? `Review ${due}` : "Practice anyway"}
+        </a>
       )}
     </div>
   );
@@ -211,7 +211,7 @@ function continueEyebrow(inProgress: boolean, anyDone: boolean) {
   return anyDone ? "Up next" : "Start here";
 }
 
-/** The review card's heading and line: cards going cold, when the next ones come, or none yet. */
+/** The review row's heading and line. */
 function reviewCopy(due: number, total: number, nextDue: Day | undefined, now: Day) {
   if (due) {
     return {

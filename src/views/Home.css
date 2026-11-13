@@ -5,6 +5,12 @@
   align-items: start;
 }
 
+.hero-main {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
 .hero h1 {
   font-size: var(--step-4);
   font-weight: 800;
@@ -111,14 +117,25 @@
   background: var(--hl-strong);
 }
 
-/* today */
-.today {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-  gap: 16px;
-  margin-top: 32px;
+.review-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
 }
 
+.review-row h2 {
+  font-size: var(--step-1);
+}
+
+.review-row p {
+  color: var(--ink-2);
+  font-size: var(--step--1);
+}
+
+/* the next lesson */
 .today-card {
   padding: 20px;
   display: flex;
@@ -222,7 +239,6 @@
 
 @media (max-width: 820px) {
   .hero,
-  .today,
   .lesson-list {
     grid-template-columns: minmax(0, 1fr);
   }
