@@ -10,6 +10,9 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/600.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
+import { applyTheme, readTheme } from "./styles/theme";
+
+applyTheme(readTheme());
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

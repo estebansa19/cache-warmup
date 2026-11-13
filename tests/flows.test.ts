@@ -162,3 +162,20 @@ describe("keyboard shortcuts", () => {
     expect(savedProgress().cards[key].box).toBe(1);
   });
 });
+
+describe("appearance", () => {
+  test("a theme picked in Settings applies right away and is there on the next visit", async () => {
+    await open("#/settings");
+    await act(async () => page.querySelector<HTMLInputElement>("input[name=theme][value=dark]")!.click());
+    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    act(() => root.unmount());
+    delete document.documentElement.dataset.theme;
+    page.remove();
+    await open("#/settings");
+
+    expect(page.querySelector<HTMLInputElement>("input[name=theme][value=dark]")!.checked).toBe(true);
+    await act(async () => page.querySelector<HTMLInputElement>("input[name=theme][value=system]")!.click());
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+  });
+});
