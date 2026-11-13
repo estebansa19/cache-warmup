@@ -375,6 +375,29 @@ mark {
   font-size: inherit;
 }
 
+/* Code highlighting: rehype-highlight adds these classes when the lessons are built. */
+.hljs-keyword {
+  color: var(--cobalt);
+}
+
+.hljs-string {
+  color: var(--good);
+}
+
+.hljs-comment {
+  color: var(--ink-3);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-literal {
+  color: var(--code-number);
+}
+
+.hljs-title {
+  font-weight: 600;
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--rule);

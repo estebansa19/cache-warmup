@@ -37,6 +37,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "happy-dom": "^21.0.4",
     "prettier": "^3.9.10",
+    "rehype-highlight": "^7.0.2",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-mdx-frontmatter": "^6.0.0",
