@@ -2,6 +2,7 @@ import { z } from "zod/mini";
 import type { CheckKind } from "../content/types";
 import type { Day } from "../utils/dates";
 import type { Progress } from "./progress";
+import { emptyProd, maxLevel } from "./prod";
 import { clampTier } from "./srs";
 
 /*
@@ -52,6 +53,12 @@ const cardSchema = z.object({
 
 const doneSchema = z.object({ at: day, correct: count, total: count });
 
+const prodSchema = z.object({
+  owned: z.catch(z.record(z.string(), z.unknown()), {}),
+  served: z.catch(z.number().check(z.nonnegative()), 0),
+  at: z.catch(z.number().check(z.nonnegative()), 0),
+});
+
 const progressSchema = z.object({
   v: z.union([z.literal(1), z.literal(2)]),
   xp: z.catch(count, 0),
@@ -65,6 +72,8 @@ const progressSchema = z.object({
   checks: z.catch(z.record(z.string(), z.unknown()), {}),
   iv: z.catch(z.record(z.string(), z.unknown()), {}),
   cards: z.catch(z.record(z.string(), z.unknown()), {}),
+  // Saved before prod existed, or broken: prod starts over and your XP is all there to spend.
+  prod: z.catch(prodSchema, emptyProd),
 });
 
 /**
@@ -90,6 +99,7 @@ export function normalize(data: unknown, legacy: LegacyKeys): Progress | null {
     checks: {},
     iv: validEntries(d.iv, interviewSchema),
     cards: validEntries(d.cards, cardSchema),
+    prod: { ...d.prod, owned: ownedLevels(d.prod.owned) },
   };
 
   const checks = validEntries(d.checks, checkSchema);
@@ -128,6 +138,13 @@ function migrateV1(
   }
 
   return out;
+}
+
+/** Upgrade levels, each kept within what can be bought. */
+function ownedLevels(owned: Record<string, unknown>): Record<string, number> {
+  const levels = validEntries(owned, count);
+  for (const id of Object.keys(levels)) levels[id] = Math.min(levels[id], maxLevel(id));
+  return levels;
 }
 
 /** Keeps the entries of a record that pass `schema`, and drops the rest. */

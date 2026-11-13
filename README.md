@@ -31,6 +31,8 @@ It works from the keyboard (A–D or 1–4 to answer, Enter or → for the next 
 
 There's also an **Interview gym** with every lesson's question plus 12 extra ones, plus XP and levels from Intern to Distinguished. (Yes, everyone starts as an Intern.)
 
+Your XP also runs **Prod**, a small idle game: spend it on a service that grows from a laptop under your desk into a full architecture, drawn as a diagram that fills in as you build. Each finished lesson unlocks an upgrade, and your flashcards are its cache: a lesson left cold takes its upgrade offline until you review. Spending XP never lowers your level.
+
 Code examples lean toward Ruby on Rails and PostgreSQL, but the ideas apply to any stack.
 
 ## Run it locally
@@ -106,7 +108,7 @@ Claude Code has been tested end to end. OpenCode has been tested end to end befo
 
 ## Your progress
 
-Progress is saved in your browser's local storage: XP, answers, flashcard schedule, and drafts.
+Progress is saved in your browser's local storage: XP, answers, flashcard schedule, drafts, and Prod.
 
 - **Use the same browser** to keep your progress. Private/incognito windows forget everything when they close.
 - **To move to another computer,** go to Settings → **Export progress**, then **Import progress** on the other machine. The export is also a good backup.

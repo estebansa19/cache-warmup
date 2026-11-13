@@ -8,6 +8,7 @@ import "./Nav.css";
 const LINKS = [
   { view: "home", label: "Path" },
   { view: "review", label: "Review" },
+  { view: "prod", label: "Prod" },
   { view: "gym", label: "Interview gym" },
   { view: "notes", label: "Cheat sheets" },
   { view: "settings", label: "Settings" },

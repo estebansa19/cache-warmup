@@ -1,7 +1,8 @@
 import { isCheck, playerSteps, type CheckStep, type Lesson } from "../content/types";
 import type { LegacyKeys } from "./normalize";
+import type { Health } from "./prod";
 import type { CheckResult, Progress } from "./progress";
-import { isDue } from "./srs";
+import { TIERS, isDue } from "./srs";
 import { addDays, type Day } from "../utils/dates";
 
 /** From this average tier up (L2 and L1), a lesson with nothing due counts as hot. */
@@ -78,6 +79,22 @@ export function lessonTemperature(
 
   const tier = cards.reduce((sum, card) => sum + card.box, 0) / Math.max(1, cards.length);
   return { temperature: tier >= HOT_TIER ? "hot" : "warm", due: 0 };
+}
+
+/**
+ * Prod's cache, read from your flashcards: each card not due counts by its tier (Disk ¼ … L1 all),
+ * a due card counts as a miss, and a finished lesson gone cold pages its upgrade offline.
+ */
+export function prodHealth(lessons: Lesson[], progress: Progress, now: Day): Health {
+  const cards = lessons.flatMap((lesson) =>
+    lesson.cards.flatMap((card) => progress.cards[cardKey(lesson, card)] ?? []),
+  );
+  const warm = cards.reduce((sum, card) => sum + (isDue(card, now) ? 0 : (card.box + 1) / TIERS.length), 0);
+  const cold = lessons.filter(
+    (lesson) => progress.done[lesson.id] && lessonTemperature(lesson, progress, now).temperature === "cold",
+  );
+
+  return { cold: new Set(cold.map((lesson) => lesson.id)), warmth: cards.length ? warm / cards.length : 0 };
 }
 
 export type LessonStatus = "new" | "in-progress" | "done";

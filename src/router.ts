@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
  *   #/            path (home)
  *   #/lesson/:id  a lesson
  *   #/review      flashcards
+ *   #/prod        the service your XP pays for
  *   #/gym         interview gym
  *   #/notes       cheat sheets
  *   #/settings    settings
@@ -14,12 +15,13 @@ export type Route =
   | { view: "home" }
   | { view: "lesson"; id: string }
   | { view: "review" }
+  | { view: "prod" }
   | { view: "gym" }
   | { view: "notes" }
   | { view: "settings" };
 
 /** Views whose route is just their name, like #/review. */
-const SIMPLE_VIEWS = ["review", "gym", "notes", "settings"] as const;
+const SIMPLE_VIEWS = ["review", "prod", "gym", "notes", "settings"] as const;
 type SimpleView = (typeof SIMPLE_VIEWS)[number];
 
 export function parseRoute(hash: string): Route {

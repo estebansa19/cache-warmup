@@ -2,8 +2,10 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { lessons } from "../content/lessons";
 import { textOf } from "../content/parse-lesson";
 import type { CheckKind, CheckStep, Lesson } from "../content/types";
+import { upgradeFor } from "../content/upgrades";
 import { hrefFor } from "../router";
 import { XP, levelInfo, streak } from "../state/levels";
+import { xpToSpend } from "../state/prod";
 import { useProgress } from "../state/ProgressContext";
 import type { CheckResult } from "../state/progress";
 import {
@@ -90,7 +92,7 @@ export function WarmupTrace({ lesson, justFinished }: Props) {
       </ol>
       <TraceStats lesson={lesson} states={trace.map((line) => line.state)} />
       <Shelf lesson={lesson} now={now} fresh={Boolean(justFinished)} />
-      {justFinished && <Earned xpBefore={justFinished.xpBefore} />}
+      {justFinished && <Earned lesson={lesson} xpBefore={justFinished.xpBefore} />}
       <div className="row">
         {due > 0 && (
           <a className="btn" href={hrefFor({ view: "review" })}>
@@ -215,8 +217,8 @@ function Shelf({ lesson, now, fresh }: { lesson: Lesson; now: Day; fresh: boolea
   );
 }
 
-/** Right after finishing: the XP the lesson added, and the new level if it crossed into one. */
-function Earned({ xpBefore }: { xpBefore: number }) {
+/** Right after finishing: the XP the lesson added, the new level if it crossed into one, and what it unlocked in prod. */
+function Earned({ lesson, xpBefore }: { lesson: Lesson; xpBefore: number }) {
   const { progress } = useProgress();
   const level = levelInfo(progress.xp);
   const leveledUp = level.name !== levelInfo(xpBefore).name;
@@ -229,6 +231,10 @@ function Earned({ xpBefore }: { xpBefore: number }) {
         </p>
       )}
       <LevelBar xp={progress.xp} gained={progress.xp - xpBefore} />
+      <p className="muted">
+        Unlocked in prod: <b>{upgradeFor(lesson).name}</b>. You have {xpToSpend(progress)} XP to spend.{" "}
+        <a href={hrefFor({ view: "prod" })}>Install it</a>
+      </p>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { CheckKind } from "../content/types";
 import type { Day } from "../utils/dates";
 import { words } from "../utils/text";
 import { XP } from "./levels";
+import { bank, canBuy, emptyProd, type Prod } from "./prod";
 import { newCard, reviewCard, type Card } from "./srs";
 
 /*
@@ -60,6 +61,8 @@ export type Progress = {
   last: string | null;
   /** "About you" note for the AI interviewer. */
   profile: string;
+  /** The service your XP pays for (see prod.ts). */
+  prod: Prod;
 };
 
 export function emptyProgress(): Progress {
@@ -76,6 +79,7 @@ export function emptyProgress(): Progress {
     misses: 0,
     last: null,
     profile: "",
+    prod: emptyProd(),
   };
 }
 
@@ -90,6 +94,8 @@ export type Action =
   | { type: "feedback"; key: string; feedback: Feedback; today: Day }
   | { type: "revealAnswer"; key: string; today: Day }
   | { type: "profile"; text: string }
+  | { type: "bank"; rps: number; now: number }
+  | { type: "buy"; id: string; rps: number; now: number }
   | { type: "replace"; progress: Progress };
 
 export function reducer(state: Progress, action: Action): Progress {
@@ -198,6 +204,18 @@ export function reducer(state: Progress, action: Action): Progress {
 
     case "profile":
       return { ...state, profile: action.text };
+
+    case "bank":
+      return { ...state, prod: bank(state.prod, action.rps, action.now) };
+
+    case "buy": {
+      if (!canBuy(state, action.id)) return state;
+
+      // Count what was served at the old speed before the new level speeds it up.
+      const prod = bank(state.prod, action.rps, action.now);
+      const level = (prod.owned[action.id] ?? 0) + 1;
+      return { ...state, prod: { ...prod, owned: { ...prod.owned, [action.id]: level } } };
+    }
 
     case "replace":
       return action.progress;
