@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { parseLooseJson } from "../src/ai/client";
 import { toFeedback } from "../src/ai/feedback";
-import { feedbackPrompt, readFeedbackRequest } from "../server/prompt.mjs";
+import { LIMITS, feedbackPrompt, readFeedbackRequest } from "../server/prompt.mjs";
 
 describe("parseLooseJson", () => {
   test("plain JSON", () => expect(parseLooseJson('{"score": 3}')).toEqual({ score: 3 }));
@@ -50,6 +50,15 @@ describe("feedbackPrompt (built on the server)", () => {
     expect(prompt).toContain("- hash map\n- linked list");
     expect(prompt).toContain("I'd use a map");
     expect(prompt).toContain("About the candidate: Staff engineer.");
+  });
+
+  test("grades the whole answer and profile, up to the request limits", () => {
+    const answer = "a".repeat(LIMITS.answer - 1) + "Z";
+    const profile = "p".repeat(LIMITS.profile - 1) + "Q";
+    const prompt = feedbackPrompt(readFeedbackRequest({ question: "Q", rubric: null, answer, profile }));
+
+    expect(prompt).toContain(answer);
+    expect(prompt).toContain(profile);
   });
 
   test("falls back to a generic rubric and profile", () => {
