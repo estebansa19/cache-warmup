@@ -1,17 +1,16 @@
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { InterviewRep } from "../components/InterviewRep";
+import { Check } from "../components/steps/Check";
 import { HookStep } from "../components/steps/HookStep";
-import { MythStep } from "../components/steps/MythStep";
-import { OrderStep } from "../components/steps/OrderStep";
-import { QuizStep } from "../components/steps/QuizStep";
 import { ReadStep } from "../components/steps/ReadStep";
 import { RecapStep } from "../components/steps/RecapStep";
+import type { JustFinished } from "../components/WarmupTrace";
 import { isCheck, playerSteps, type Lesson, type PlayerStep } from "../content/types";
 import { hrefFor } from "../router";
 import { XP } from "../state/levels";
 import { useProgress } from "../state/ProgressContext";
 import type { CheckResult } from "../state/progress";
-import { cardKey, checkKey, lessonScore, resultFor } from "../state/selectors";
+import { cardKey, checkKey, lessonScore, resultFor, traceState } from "../state/selectors";
 import { today } from "../utils/dates";
 import { focusFirst } from "../utils/focus";
 import "./LessonPlayer.css";
@@ -26,6 +25,7 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
   const blocked = isCheck(step) && !result;
   const hint = stepHint(step, blocked);
   const done = Boolean(progress.done[lesson.id]);
+  const [justFinished, setJustFinished] = useState<JustFinished | null>(null);
   const sheet = useRef<HTMLElement>(null);
   const shownPos = useRef(pos);
   const wasDone = useRef(done);
@@ -82,6 +82,7 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
   function finish() {
     const score = lessonScore(lesson, progress);
 
+    setJustFinished({ xpBefore: progress.xp });
     dispatch({
       type: "finish",
       lessonId: lesson.id,
@@ -107,7 +108,7 @@ export function LessonPlayer({ lesson }: { lesson: Lesson }) {
 
       {/* key: each step starts with fresh component state */}
       <article className="sheet" ref={sheet} key={pos}>
-        {renderStep(step, { lesson, result, answer })}
+        {renderStep(step, { lesson, result, answer, justFinished })}
       </article>
 
       <div className="player-nav">
@@ -170,20 +171,19 @@ type StepContext = {
   lesson: Lesson;
   result: CheckResult | undefined;
   answer: (result: CheckResult) => void;
+  justFinished: JustFinished | null;
 };
 
-function renderStep(step: PlayerStep, { lesson, result, answer }: StepContext) {
+function renderStep(step: PlayerStep, { lesson, result, answer, justFinished }: StepContext) {
   switch (step.kind) {
     case "hook":
       return <HookStep lesson={lesson} />;
     case "read":
       return <ReadStep step={step} />;
     case "quiz":
-      return <QuizStep step={step} seed={checkKey(lesson, step)} result={result} onAnswer={answer} />;
     case "myth":
-      return <MythStep step={step} result={result} onAnswer={answer} />;
     case "order":
-      return <OrderStep step={step} seed={checkKey(lesson, step)} result={result} onAnswer={answer} />;
+      return <Check step={step} seed={checkKey(lesson, step)} result={result} onAnswer={answer} />;
     case "interview":
       return (
         <>
@@ -195,7 +195,7 @@ function renderStep(step: PlayerStep, { lesson, result, answer }: StepContext) {
         </>
       );
     case "recap":
-      return <RecapStep lesson={lesson} />;
+      return <RecapStep lesson={lesson} justFinished={justFinished} />;
   }
 }
 
@@ -208,7 +208,7 @@ function StepSegments({ lesson, steps, pos }: { lesson: Lesson; steps: PlayerSte
     if (i === pos) return "current";
 
     const result = isCheck(step) ? resultFor(lesson, step, progress) : undefined;
-    if (result) return result.ok ? "ok" : "miss";
+    if (result) return traceState(result);
     return i < pos || done ? "seen" : "";
   }
 

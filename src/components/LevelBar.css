@@ -1,0 +1,32 @@
+.level {
+  display: grid;
+  gap: 12px;
+}
+
+.level-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.level-name {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: var(--step-2);
+}
+
+.xp-bar {
+  height: 8px;
+  background: var(--code-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.xp-bar i {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  border-radius: 999px;
+}

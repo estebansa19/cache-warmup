@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "../src/App";
 import { extraQuestions, lessons } from "../src/content/lessons";
-import { playerSteps } from "../src/content/types";
+import { playerSteps, type MythStep } from "../src/content/types";
 import { XP } from "../src/state/levels";
 import { STORAGE_KEY } from "../src/state/storage";
 
@@ -71,6 +71,28 @@ describe("finishing a lesson", () => {
     expect(saved.done[lesson.id]).toBeDefined();
     expect(Object.keys(saved.cards)).toHaveLength(lesson.cards.length);
     expect(control(/Back to the path/)).toBeDefined();
+  });
+
+  test("finishing shows the warm-up trace, where a missed check can be re-warmed", async () => {
+    const myth = lesson.steps.find((step): step is MythStep => step.kind === "myth")!;
+    const key = `${lesson.id}:${myth.id}`;
+
+    await open(`#/lesson/${lesson.id}`, {
+      pos: { [lesson.id]: lastStep },
+      checks: { [key]: { kind: "myth", ok: false, pick: !myth.fact } },
+    });
+
+    await click(control(/Finish lesson/));
+    expect(page.textContent).toContain("Warm-up trace");
+
+    await click(control(/Re-warm/));
+    await click(control(myth.fact ? /^Fact$/ : /^Myth$/));
+
+    expect(savedProgress()).toMatchObject({
+      xp: XP.lesson + XP.rewarm,
+      checks: { [key]: { ok: false, rewarm: true } },
+    });
+    expect(control(/Re-warm/)).toBeUndefined();
   });
 
   test("leaving by the path link doesn't finish it", async () => {

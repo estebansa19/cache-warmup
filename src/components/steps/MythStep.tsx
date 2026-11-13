@@ -3,9 +3,9 @@ import type { MythStep as Step } from "../../content/types";
 import type { CheckResult } from "../../state/progress";
 import { Mark, Verdict, optionState } from "./Verdict";
 
-type Props = { step: Step; result?: CheckResult; onAnswer: (r: CheckResult) => void };
+type Props = { step: Step; result?: CheckResult; onAnswer: (r: CheckResult) => void; xp?: number };
 
-export function MythStep({ step, result, onAnswer }: Props) {
+export function MythStep({ step, result, onAnswer, xp }: Props) {
   const [answeredNow, setAnsweredNow] = useState(false);
 
   function pick(value: boolean) {
@@ -32,6 +32,7 @@ export function MythStep({ step, result, onAnswer }: Props) {
           why={step.why}
           lead={<b>{step.fact ? "Fact." : "Myth."}</b>}
           focus={answeredNow}
+          xp={xp}
         />
       )}
     </>

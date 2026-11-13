@@ -1,9 +1,11 @@
+import { LevelBar } from "../components/LevelBar";
+import { TemperaturePill } from "../components/TemperaturePill";
 import { isKnownCard, lessons } from "../content/lessons";
 import { TRACKS, playerSteps, type Lesson } from "../content/types";
 import { hrefFor } from "../router";
-import { levelInfo, streak } from "../state/levels";
+import { streak } from "../state/levels";
 import { useProgress } from "../state/ProgressContext";
-import { lessonScore, lessonStatus, nextLesson } from "../state/selectors";
+import { lessonStatus, nextLesson } from "../state/selectors";
 import { TIERS, dueCardKeys, nextDueDay, tierCounts } from "../state/srs";
 import type { Progress } from "../state/progress";
 import { prettyDay, today, type Day } from "../utils/dates";
@@ -54,27 +56,12 @@ export function Home() {
 }
 
 function Stats({ progress }: { progress: Progress }) {
-  const level = levelInfo(progress.xp);
   const reviews = progress.hits + progress.misses;
   const hitRate = reviews ? `${Math.round((progress.hits / reviews) * 100)}%` : "–";
 
   return (
     <div className="panel stats">
-      <div className="level-row">
-        <span className="level-name">{level.name}</span>
-        <span className="mono-note">
-          {progress.xp} XP
-          {level.next ? ` · ${level.next.xp - progress.xp} to ${level.next.name}` : " · max level"}
-        </span>
-      </div>
-      <div
-        className="xp-bar"
-        role="progressbar"
-        aria-label="Progress to next level"
-        aria-valuenow={Math.round(level.percent)}
-      >
-        <i style={{ width: `${level.percent}%` }} />
-      </div>
+      <LevelBar xp={progress.xp} />
       <div className="kpis">
         <Kpi value={`${Object.keys(progress.done).length}/${lessons.length}`} label="lessons" />
         <Kpi value={String(streak(progress.days, today()))} label="day streak" />
@@ -203,18 +190,11 @@ function LessonRow({ lesson, progress }: { lesson: Lesson; progress: Progress })
   );
 }
 
-/** "done · 4/5", the current step, or the time it takes. */
+/** A finished lesson's temperature, the current step, or the time it takes. */
 function LessonPill({ lesson, progress }: { lesson: Lesson; progress: Progress }) {
   switch (lessonStatus(lesson, progress)) {
-    case "done": {
-      const score = lessonScore(lesson, progress);
-
-      return (
-        <span className="pill done">
-          done · {score.correct}/{score.total}
-        </span>
-      );
-    }
+    case "done":
+      return <TemperaturePill lesson={lesson} />;
     case "in-progress":
       return (
         <span className="pill progress">

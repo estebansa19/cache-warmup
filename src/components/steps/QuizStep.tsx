@@ -6,9 +6,15 @@ import { Mark, Verdict, optionState } from "./Verdict";
 
 const OPTION_KEYS = "ABCDEF";
 
-type Props = { step: Step; seed: string; result?: CheckResult; onAnswer: (r: CheckResult) => void };
+type Props = {
+  step: Step;
+  seed: string;
+  result?: CheckResult;
+  onAnswer: (r: CheckResult) => void;
+  xp?: number;
+};
 
-export function QuizStep({ step, seed, result, onAnswer }: Props) {
+export function QuizStep({ step, seed, result, onAnswer, xp }: Props) {
   // Options appear shuffled (the same way every time), so the answer isn't always in the same spot.
   const order = shuffledIndexes(step.options.length, seed);
   const [answeredNow, setAnsweredNow] = useState(false);
@@ -40,7 +46,7 @@ export function QuizStep({ step, seed, result, onAnswer }: Props) {
           />
         ))}
       </div>
-      {result && <Verdict ok={result.ok} why={step.why} focus={answeredNow} />}
+      {result && <Verdict ok={result.ok} why={step.why} focus={answeredNow} xp={xp} />}
     </>
   );
 }

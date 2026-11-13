@@ -1,0 +1,248 @@
+/* The warm-up trace: how a finished lesson went, as cache hits and misses. */
+
+.trace {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.trace-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.trace-head h2 {
+  font-size: var(--step-3);
+  font-weight: 700;
+}
+
+.trace-lines {
+  list-style: none;
+  margin: 0;
+  padding: 4px 14px;
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  font-family: var(--f-mono);
+  font-size: var(--step--1);
+}
+
+.trace-line + .trace-line {
+  border-top: 1px dashed var(--rule);
+}
+
+.trace-row {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) 5.5rem minmax(4.5rem, auto);
+  gap: 12px;
+  align-items: center;
+  min-height: 46px;
+}
+
+.trace-index {
+  color: var(--ink-3);
+}
+
+.trace-what {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--f-body);
+  font-size: 0.93rem;
+  color: var(--ink-2);
+}
+
+.trace-what b {
+  color: var(--ink);
+}
+
+.trace-outcome {
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.trace-line.hit .trace-outcome {
+  color: var(--good);
+}
+
+.trace-line.miss .trace-outcome,
+.trace-line.missed-twice .trace-outcome {
+  color: var(--bad);
+}
+
+.trace-line.rewarmed .trace-outcome {
+  color: var(--ink);
+  justify-self: start;
+  padding: 0 4px;
+  background: var(--hl);
+}
+
+.trace-earned {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.trace-retry {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 0 16px;
+  font-family: var(--f-body);
+  font-size: 1rem;
+}
+
+.trace-retry .question,
+.trace-retry .myth-claim {
+  font-size: var(--step-1);
+}
+
+.trace-stats {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.trace-stats b {
+  display: block;
+  font-family: var(--f-display);
+  font-size: var(--step-3);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.trace-stats span {
+  font-size: var(--step--1);
+  color: var(--ink-3);
+}
+
+/* The lesson's flashcards as small index cards, with the tier's color along the top. */
+.shelf {
+  display: grid;
+  gap: 8px;
+}
+
+.shelf .small-label {
+  margin: 0;
+}
+
+.shelf-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shelf-card {
+  min-width: 62px;
+  padding: 14px 10px 8px;
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--ink-3);
+  border-radius: 4px;
+  background: var(--sheet);
+  box-shadow: var(--shadow);
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--ink-2);
+}
+
+.shelf-card.tier-2 {
+  border-top-color: var(--cobalt);
+}
+
+.shelf-card.tier-3 {
+  border-top-color: var(--hl-strong);
+}
+
+.earned {
+  display: grid;
+  gap: 10px;
+}
+
+.level-up {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: var(--step-1);
+}
+
+/* Right after finishing, the trace plays in: lines first, then the cards land, then the XP fills. */
+.trace.fresh .pill {
+  animation: pop 0.35s ease-out 0.15s both;
+}
+
+.trace.fresh .trace-line {
+  animation: rise 0.3s ease-out both;
+  animation-delay: calc(var(--i) * 90ms);
+}
+
+.trace.fresh .shelf-card {
+  animation: land 0.4s cubic-bezier(0.2, 0.8, 0.3, 1.3) both;
+  animation-delay: calc(500ms + var(--i) * 80ms);
+}
+
+.trace.fresh .xp-bar i {
+  animation: fill 0.9s ease-out 1s both;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes land {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) rotate(-5deg);
+  }
+}
+
+@keyframes fill {
+  from {
+    width: 0;
+  }
+}
+
+/* Phones: the question gets its own line under the check's number and outcome. */
+@media (max-width: 520px) {
+  .trace-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "index outcome earned"
+      "what what what";
+    row-gap: 2px;
+    padding: 8px 0;
+  }
+
+  .trace-index {
+    grid-area: index;
+  }
+
+  .trace-outcome {
+    grid-area: outcome;
+  }
+
+  .trace-earned {
+    grid-area: earned;
+  }
+
+  .trace-what {
+    grid-area: what;
+  }
+}

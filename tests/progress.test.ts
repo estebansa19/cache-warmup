@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
+import { lessons } from "../src/content/lessons";
 import { XP, levelInfo, streak } from "../src/state/levels";
 import { normalize, type LegacyKeys } from "../src/state/normalize";
 import { emptyProgress, reducer, type Action } from "../src/state/progress";
+import { cardKey, lessonTemperature, traceState } from "../src/state/selectors";
 import { dueCardKeys, newCard, reviewCard } from "../src/state/srs";
 
 const DAY = "2026-10-15";
@@ -74,6 +76,39 @@ describe("progress reducer", () => {
     expect(p.checks["bigo:q1"]).toEqual({ kind: "quiz", ok: true, pick: 0 });
   });
 
+  test("a missed check can be re-warmed once, for part of the XP, and stays a miss on record", () => {
+    const missed = reducer(start, {
+      type: "answer",
+      key: "bigo:q1",
+      result: { kind: "quiz", ok: false, pick: 2 },
+      today: DAY,
+    });
+
+    const rewarm = { type: "rewarm", key: "bigo:q1", ok: true, today: DAY } as const;
+    const once = reducer(missed, rewarm);
+    expect(once.checks["bigo:q1"]).toMatchObject({ ok: false, rewarm: true });
+    expect(once.xp).toBe(XP.rewarm);
+    expect(traceState(once.checks["bigo:q1"])).toBe("rewarmed");
+    expect(reducer(once, rewarm)).toBe(once);
+
+    const missedAgain = reducer(missed, { ...rewarm, ok: false });
+    expect(missedAgain.xp).toBe(0);
+    expect(traceState(missedAgain.checks["bigo:q1"])).toBe("missed-twice");
+    expect(reducer(missedAgain, rewarm)).toBe(missedAgain);
+  });
+
+  test("a check you got right, or never answered, can't be re-warmed", () => {
+    const hit = reducer(start, {
+      type: "answer",
+      key: "bigo:q1",
+      result: { kind: "quiz", ok: true, pick: 1 },
+      today: DAY,
+    });
+
+    expect(reducer(hit, { type: "rewarm", key: "bigo:q1", ok: true, today: DAY })).toBe(hit);
+    expect(reducer(start, { type: "rewarm", key: "bigo:q1", ok: true, today: DAY })).toBe(start);
+  });
+
   test("finishing a lesson adds its cards once and awards XP once", () => {
     const finish: Action = {
       type: "finish",
@@ -118,6 +153,42 @@ describe("progress reducer", () => {
 
     const long = reducer(start, { type: "draft", key: "bigo", text: "word ".repeat(45) });
     expect(reducer(long, { type: "revealAnswer", key: "bigo", today: DAY }).xp).toBe(XP.interview);
+  });
+});
+
+describe("a finished lesson's temperature", () => {
+  const lesson = lessons[0];
+  const keys = lesson.cards.map((card) => cardKey(lesson, card));
+  const withCards = (box: number, due: string) => ({
+    ...emptyProgress(),
+    cards: Object.fromEntries(keys.map((key) => [key, { box, due }])),
+  });
+
+  test("is warm while nothing is due, and hot once its cards sit in the top tiers", () => {
+    expect(lessonTemperature(lesson, withCards(0, "2026-10-16"), DAY)).toEqual({
+      temperature: "warm",
+      due: 0,
+    });
+    expect(lessonTemperature(lesson, withCards(2, "2026-10-20"), DAY)).toEqual({
+      temperature: "hot",
+      due: 0,
+    });
+  });
+
+  test("cools when cards come due, and goes cold after a week of waiting", () => {
+    expect(lessonTemperature(lesson, withCards(1, DAY), DAY)).toEqual({
+      temperature: "cooling",
+      due: keys.length,
+    });
+    expect(lessonTemperature(lesson, withCards(3, "2026-10-09"), DAY).temperature).toBe("cooling");
+    expect(lessonTemperature(lesson, withCards(3, "2026-10-08"), DAY).temperature).toBe("cold");
+  });
+
+  test("one long-overdue card is enough to go cold", () => {
+    const progress = withCards(2, "2026-10-20");
+    progress.cards[keys[0]] = { box: 0, due: "2026-10-01" };
+
+    expect(lessonTemperature(lesson, progress, DAY)).toEqual({ temperature: "cold", due: 1 });
   });
 });
 
@@ -176,7 +247,12 @@ describe("reading saved and imported progress", () => {
         xp: "lots",
         days: [DAY, 42, "yesterday"],
         cards: { "bigo:c1": null, "bigo:c2": { box: 9, due: DAY }, "bigo:c3": { box: 1, due: "soon" } },
-        checks: { "bigo:qabc": { kind: "quiz", ok: true }, "bigo:x": "yes", "bigo:y": { ok: true } },
+        checks: {
+          "bigo:qabc": { kind: "quiz", ok: true },
+          "bigo:mdef": { kind: "myth", ok: false, rewarm: true },
+          "bigo:x": "yes",
+          "bigo:y": { ok: true },
+        },
         done: { bigo: { at: DAY, correct: 1, total: 2 }, other: { at: 5 } },
         pos: { bigo: 3, other: -1, third: "two" },
         iv: { bigo: { draft: "my answer", fb: { score: 99 } }, x: null },
@@ -189,7 +265,11 @@ describe("reading saved and imported progress", () => {
     expect(p.xp).toBe(0);
     expect(p.days).toEqual([DAY]);
     expect(p.cards).toEqual({ "bigo:c2": { box: 3, due: DAY } }); // an impossible tier is clamped
-    expect(p.checks).toEqual({ "bigo:qabc": { kind: "quiz", ok: true } });
+    expect(p.checks).toEqual({
+      "bigo:qabc": { kind: "quiz", ok: true },
+      "bigo:mdef": { kind: "myth", ok: false, rewarm: true },
+    });
+
     expect(p.done).toEqual({ bigo: { at: DAY, correct: 1, total: 2 } });
     expect(p.pos).toEqual({ bigo: 3 });
     expect(p.iv.bigo).toMatchObject({ draft: "my answer" });
